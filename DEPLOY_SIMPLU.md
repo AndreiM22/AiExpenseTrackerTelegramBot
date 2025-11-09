@@ -1,0 +1,117 @@
+# Deploy Simplu pe Server - 3 Pași
+
+## Înainte de Deploy
+
+1. **Domeniu configurat**: `api.example.com` → IP server
+2. **Porturi deschise**: 80, 443 (firewall/cloud provider)
+
+---
+
+## 3 Pași - Asta e Tot!
+
+### 1️⃣ Clonează pe Server
+```bash
+ssh user@server-ip
+git clone https://github.com/your-username/TelegramBotAI.git
+cd TelegramBotAI
+```
+
+### 2️⃣ Configurează .env
+```bash
+cp .env.example .env
+nano .env
+```
+
+Completează:
+```env
+GROQAPIKEY=your-groq-key
+telegramToken=your-telegram-token
+DOMAIN=api.example.com         # ⚠️ IMPORTANT!
+SSL_EMAIL=your-email@gmail.com  # ⚠️ IMPORTANT!
+ENCRYPTION_KEY=generate-random-32-chars
+```
+
+**Salvează**: `Ctrl+O`, Enter, `Ctrl+X`
+
+### 3️⃣ Deploy Automat
+```bash
+# Instalează Docker (dacă nu e)
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+
+# Setup SSL + Start
+./setup-ssl.sh
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+---
+
+## ✅ Verificare
+
+```bash
+# Status
+docker-compose -f docker-compose.prod.yml ps
+
+# Test API
+curl https://api.example.com/health
+```
+
+**Expected**: `{"status":"healthy"}`
+
+---
+
+## 🎯 Access API
+
+- **Health**: `https://api.example.com/health`
+- **Docs**: `https://api.example.com/docs`
+- **API**: `https://api.example.com/api/v1/...`
+
+---
+
+## 📝 Comenzi Utile
+
+```bash
+# Vezi logs
+docker-compose -f docker-compose.prod.yml logs -f
+
+# Restart
+docker-compose -f docker-compose.prod.yml restart
+
+# Stop
+docker-compose -f docker-compose.prod.yml down
+
+# Update code
+git pull && docker-compose -f docker-compose.prod.yml up -d --build
+```
+
+---
+
+## 🔧 Troubleshooting
+
+### SSL nu funcționează
+```bash
+# Verifică DNS
+ping api.example.com
+
+# Re-run SSL setup
+./setup-ssl.sh
+```
+
+### Container nu pornește
+```bash
+# Vezi erori
+docker-compose -f docker-compose.prod.yml logs app
+
+# Rebuild
+docker-compose -f docker-compose.prod.yml up -d --build
+```
+
+---
+
+## 📚 Documentație Completă
+
+Vezi [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) pentru detalii complete.
+
+---
+
+**Gata! API-ul tău rulează cu HTTPS pe domeniul tău! 🚀**

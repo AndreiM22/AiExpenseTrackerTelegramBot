@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./verify_docker.sh:*)",
+      "Bash(chmod:*)",
+      "Bash(open:*)",
+      "Bash(docker info:*)",
+      "Bash(/dev/null)",
+      "Bash(docker:*)",
+      "Bash(for i in {1..10})",
+      "Bash(do if docker info)",
+      "Bash(then echo \"✓ Docker is ready!\")",
+      "Bash(exit 0)",
+      "Bash(fi)",
+      "Bash(echo:*)",
+      "Bash(done)",
+      "Bash(docker-compose up:*)",
+      "Bash(/usr/local/bin/docker compose logs app --tail=50)",
+      "Bash(/usr/local/bin/docker compose logs app --tail=30)",
+      "Bash(python3:*)",
+      "Bash(/usr/local/bin/docker compose restart app)",
+      "Bash(/usr/local/bin/docker compose down)",
+      "Bash(/usr/local/bin/docker compose up --build -d)",
+      "Bash(export TELEGRAM_BOT_TOKEN=\"8260315731:AAHmndoA83ipjp373bH4dFT0uNqtMIvNLCk\")",
+      "Bash(curl:*)",
+      "Bash(/usr/local/bin/docker compose logs app --tail=20)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

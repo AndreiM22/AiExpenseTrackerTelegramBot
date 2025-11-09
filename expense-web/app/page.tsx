@@ -1,0 +1,56 @@
+import { CategoryBreakdownCard } from "@/components/dashboard/CategoryBreakdownCard";
+import { DashboardFilters } from "@/components/dashboard/DashboardFilters";
+import { RecentExpensesTable } from "@/components/dashboard/RecentExpensesTable";
+import { SummaryCards } from "@/components/dashboard/SummaryCards";
+import { TrendCard } from "@/components/dashboard/TrendCard";
+import { VendorLeaderboard } from "@/components/dashboard/VendorLeaderboard";
+import { DashboardShell } from "@/components/layout/DashboardShell";
+import { getDashboardData } from "@/lib/dashboard-data";
+
+type PageProps = {
+  searchParams?: Record<string, string | string[] | undefined>;
+};
+
+export default async function Home({ searchParams }: PageProps) {
+  const dateFrom =
+    typeof searchParams?.date_from === "string"
+      ? searchParams?.date_from
+      : undefined;
+  const dateTo =
+    typeof searchParams?.date_to === "string"
+      ? searchParams?.date_to
+      : undefined;
+
+  const dashboardData = await getDashboardData({
+    dateFrom,
+    dateTo,
+  });
+
+  return (
+    <DashboardShell>
+      <div className="space-y-6">
+        <DashboardFilters dateFrom={dateFrom} dateTo={dateTo} />
+        <CategoryBreakdownCard categories={dashboardData.categories} />
+
+        <div className="grid gap-6 xl:grid-cols-[2fr_1fr] xl:items-stretch">
+          <TrendCard
+            trend={dashboardData.trend}
+            summary={dashboardData.summary}
+          />
+          <SummaryCards
+            summary={dashboardData.summary}
+            variant="stacked"
+            className="h-full"
+          />
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <RecentExpensesTable expenses={dashboardData.recentExpenses} />
+          </div>
+          <VendorLeaderboard vendors={dashboardData.vendors} />
+        </div>
+      </div>
+    </DashboardShell>
+  );
+}

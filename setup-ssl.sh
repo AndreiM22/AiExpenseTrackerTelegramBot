@@ -1,0 +1,161 @@
+#!/bin/bash
+
+# ========================================
+# SSL Setup Script with Let's Encrypt
+# ========================================
+
+set -e
+
+# Colors
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+echo "========================================="
+echo "  SSL Setup for Expense Bot AI"
+echo "========================================="
+echo ""
+
+# Load environment variables
+if [ -f .env ]; then
+    export $(cat .env | grep -v '^#' | xargs)
+else
+    echo -e "${RED}Error: .env file not found!${NC}"
+    echo "Please create .env file with DOMAIN and SSL_EMAIL variables"
+    exit 1
+fi
+
+# Check required variables
+if [ -z "$DOMAIN" ]; then
+    echo -e "${RED}Error: DOMAIN not set in .env${NC}"
+    exit 1
+fi
+
+if [ -z "$SSL_EMAIL" ]; then
+    echo -e "${RED}Error: SSL_EMAIL not set in .env${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}Domain: $DOMAIN${NC}"
+echo -e "${GREEN}Email: $SSL_EMAIL${NC}"
+echo ""
+
+# Create necessary directories
+echo "Creating SSL directories..."
+mkdir -p nginx/ssl
+mkdir -p nginx/certbot-www
+echo -e "${GREEN}✓ Directories created${NC}"
+echo ""
+
+# Check if certificates already exist
+if [ -d "nginx/ssl/live/$DOMAIN" ]; then
+    echo -e "${YELLOW}⚠ SSL certificates already exist for $DOMAIN${NC}"
+    read -p "Do you want to renew them? [y/N] " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Skipping SSL setup"
+        exit 0
+    fi
+fi
+
+# Create temporary nginx config for certificate generation
+echo "Creating temporary Nginx config..."
+cat > nginx/nginx-certbot.conf << EOF
+events {
+    worker_connections 1024;
+}
+
+http {
+    server {
+        listen 80;
+        server_name $DOMAIN www.$DOMAIN;
+
+        location /.well-known/acme-challenge/ {
+            root /var/www/certbot;
+        }
+
+        location / {
+            return 200 'OK';
+            add_header Content-Type text/plain;
+        }
+    }
+}
+EOF
+echo -e "${GREEN}✓ Temporary config created${NC}"
+echo ""
+
+# Start temporary nginx for certificate generation
+echo "Starting temporary Nginx..."
+docker run -d \
+    --name temp-nginx-certbot \
+    -p 80:80 \
+    -v $(pwd)/nginx/nginx-certbot.conf:/etc/nginx/nginx.conf:ro \
+    -v $(pwd)/nginx/certbot-www:/var/www/certbot \
+    nginx:alpine
+
+sleep 2
+echo -e "${GREEN}✓ Nginx started${NC}"
+echo ""
+
+# Generate SSL certificate
+echo "Requesting SSL certificate from Let's Encrypt..."
+echo "This may take a few minutes..."
+echo ""
+
+docker run --rm \
+    -v $(pwd)/nginx/ssl:/etc/letsencrypt \
+    -v $(pwd)/nginx/certbot-www:/var/www/certbot \
+    certbot/certbot certonly \
+    --webroot \
+    --webroot-path=/var/www/certbot \
+    --email $SSL_EMAIL \
+    --agree-tos \
+    --no-eff-email \
+    -d $DOMAIN \
+    -d www.$DOMAIN
+
+if [ $? -eq 0 ]; then
+    echo ""
+    echo -e "${GREEN}✓ SSL certificate generated successfully!${NC}"
+else
+    echo ""
+    echo -e "${RED}✗ Failed to generate SSL certificate${NC}"
+    echo "Please check:"
+    echo "  1. Domain DNS is pointing to this server"
+    echo "  2. Ports 80 and 443 are open"
+    echo "  3. Domain is accessible from the internet"
+    docker stop temp-nginx-certbot
+    docker rm temp-nginx-certbot
+    exit 1
+fi
+
+# Stop temporary nginx
+echo ""
+echo "Stopping temporary Nginx..."
+docker stop temp-nginx-certbot
+docker rm temp-nginx-certbot
+echo -e "${GREEN}✓ Cleanup complete${NC}"
+echo ""
+
+# Update nginx config with actual domain
+echo "Updating Nginx configuration..."
+sed -i.bak "s/\${DOMAIN}/$DOMAIN/g" nginx/nginx.conf
+echo -e "${GREEN}✓ Configuration updated${NC}"
+echo ""
+
+echo "========================================="
+echo -e "${GREEN}SSL Setup Complete!${NC}"
+echo "========================================="
+echo ""
+echo "Your SSL certificate is valid for 90 days."
+echo "Auto-renewal is configured in docker-compose.prod.yml"
+echo ""
+echo "Next steps:"
+echo "  1. Start production: docker-compose -f docker-compose.prod.yml up -d"
+echo "  2. Check status: docker-compose -f docker-compose.prod.yml ps"
+echo "  3. View logs: docker-compose -f docker-compose.prod.yml logs -f"
+echo ""
+echo "Your API will be available at:"
+echo "  https://$DOMAIN"
+echo ""
