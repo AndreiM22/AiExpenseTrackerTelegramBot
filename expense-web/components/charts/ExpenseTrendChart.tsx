@@ -54,9 +54,12 @@ export function ExpenseTrendChart({ data }: Props) {
             }
 
             const entry = payload[0].payload as TrendPoint;
+            const formattedLabel = formatDateLabel(
+              typeof label === "number" ? String(label) : label
+            );
             return (
               <div className={tooltipStyles}>
-                <p className="font-medium">{formatDateLabel(label)}</p>
+                <p className="font-medium">{formattedLabel}</p>
                 <p className="text-white/70">
                   Total: <span className="font-semibold">{entry.total.toFixed(2)}</span>
                 </p>
