@@ -24,6 +24,20 @@ export function CategoryDonutChart({ breakdown }: Props) {
   const hasData = total > 0 && data.length > 0;
   const paddingAngle = data.length > 1 ? 2 : 0;
 
+  const chartData: CategoryBreakdown["categories"][number][] = hasData
+    ? data
+    : [
+        {
+          category_id: "placeholder",
+          category_name: "Fără date",
+          total: 1,
+          count: 0,
+          percentage: 0,
+          color: undefined,
+          icon: undefined,
+        },
+      ];
+
   return (
     <ResponsiveContainer width="100%" height={240}>
       <PieChart>
@@ -50,14 +64,14 @@ export function CategoryDonutChart({ breakdown }: Props) {
           }}
         />
         <Pie
-          data={hasData ? data : [{ category_id: "placeholder", total: 1, category_name: "Fără date" }]}
+          data={chartData}
           innerRadius={60}
           outerRadius={90}
           paddingAngle={paddingAngle}
           dataKey="total"
           stroke="none"
         >
-          {(hasData ? data : [{ category_id: "placeholder" }]).map((entry, index) => (
+          {chartData.map((entry, index) => (
             <Cell
               key={entry.category_id}
               fill={
