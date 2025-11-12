@@ -320,9 +320,11 @@ export async function getDashboardData(
     extractDate(earliestExpenseResponse?.expenses?.[0]?.purchase_date) ??
     extractDate(earliestExpenseResponse?.expenses?.[0]?.created_at) ??
     targetDate;
+  const safeTargetDate = targetDate ?? undefined;
+  const safeEarliestDate = earliestDate ?? undefined;
 
   const summaryParams = {
-    ...(targetDate ? { target_date: targetDate } : {}),
+    ...(safeTargetDate ? { target_date: safeTargetDate } : {}),
     ...dateFilter,
   };
 
@@ -336,11 +338,15 @@ export async function getDashboardData(
       ? { ...dateFilter, limit: 5 }
       : { period: "all", limit: 5 };
 
-  const trendRange = computeTrendRange(filters, earliestDate, filters?.dateTo ?? targetDate ?? undefined);
+  const trendRange = computeTrendRange(
+    filters,
+    safeEarliestDate,
+    filters?.dateTo ?? safeTargetDate
+  );
   const trendParams = {
     trend_type: "daily",
     range_value: trendRange,
-    ...(targetDate ? { target_date: targetDate } : {}),
+    ...(safeTargetDate ? { target_date: safeTargetDate } : {}),
     ...dateFilter,
   };
 
