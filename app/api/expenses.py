@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -163,6 +163,16 @@ async def preview_expense_from_text(
         status="preview",
         data=parsed_data
     )
+
+
+@router.options("/manual/preview", include_in_schema=False)
+async def preview_expense_options():
+    return Response(status_code=200)
+
+
+@router.options("/manual", include_in_schema=False)
+async def manual_expense_options():
+    return Response(status_code=200)
 
 
 @router.post("/manual/confirm", response_model=ExpenseDetailResponse)

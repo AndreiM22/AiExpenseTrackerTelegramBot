@@ -1,4 +1,4 @@
-#!/Users/andreim./AiExpenseTrackerTelegramBot/venv/bin/python
+#!/Users/andreim./Desktop/TelegramBotAI/venv/bin/python
 # -*- coding: utf-8 -*-
 import re
 import sys

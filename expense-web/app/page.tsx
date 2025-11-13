@@ -9,20 +9,24 @@ import { DashboardShell } from "@/components/layout/DashboardShell";
 import { getDashboardData } from "@/lib/dashboard-data";
 
 type PageProps = {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?:
+    | Record<string, string | string[] | undefined>
+    | Promise<Record<string, string | string[] | undefined>>;
 };
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function Home({ searchParams }: PageProps) {
+  const resolvedParams = await Promise.resolve(searchParams);
+
   const dateFrom =
-    typeof searchParams?.date_from === "string"
-      ? searchParams?.date_from
+    typeof resolvedParams?.date_from === "string"
+      ? resolvedParams?.date_from
       : undefined;
   const dateTo =
-    typeof searchParams?.date_to === "string"
-      ? searchParams?.date_to
+    typeof resolvedParams?.date_to === "string"
+      ? resolvedParams?.date_to
       : undefined;
 
   const dashboardData = await getDashboardData({

@@ -18,97 +18,53 @@ AI-powered expense tracking bot that extracts expense data from photos, voice me
 - **Database**: PostgreSQL 15
 - **AI**: Groq AI (LLaMA, Whisper, Vision models)
 - **Encryption**: AES-GCM with cryptography library
-- **Containerization**: Docker + Docker Compose
 - **ORM**: SQLAlchemy + Alembic migrations
 
-## Run Locally with npm (no Docker)
-
-This repo now boots the Python API and the Next.js dashboard without Docker, only using `npm` commands:
-
-1. **Configure environment**  
-   ```bash
-   cp .env.example .env            # fill in GROQ_API_KEY, TELEGRAM_BOT_TOKEN, ENCRYPTION_KEY, etc.
-   ```
-   When `npm run backend:setup` runs it will read the credentials from `.env`. Without the keys the Telegram bot and Groq features will not work.
-
-2. **Install tooling** (installs the root dev tool + Next.js workspace)  
-   ```bash
-   npm install
-   ```
-
-3. **Bootstrap the backend virtualenv + DB**  
-   ```bash
-   npm run bootstrap   # creates venv, pip install, alembic upgrade, double‑checks web deps
-   ```
-
-4. **Start everything**  
-   ```bash
-   npm run dev
-   ```
-   This runs the FastAPI server on `http://localhost:8000` and the Next.js app on `http://localhost:3000` via `concurrently`. The UI automatically points to `NEXT_PUBLIC_API_URL` (defaults to the local API).
-
-> By default these scripts point `DATABASE_URL` to the local SQLite file `expensebot.db`. Export your own `DATABASE_URL` before running the scripts if you prefer Postgres.
-
-Useful extra scripts:
-
-- `npm run backend:dev` – run only the FastAPI server (requires previous `npm run backend:setup`)
-- `npm run web:dev` – run only the Next.js UI (`expense-web`)
-- `npm run web:build` / `npm run web:start` – production build + start for the UI
-
-> Tip: If you ever change Python dependencies, re-run `npm run backend:setup`. If you reset your database, delete `expensebot.db` and repeat the bootstrap step.
-
-## Quick Start
+## Quick Start (npm + FastAPI, fără Docker)
 
 ### Prerequisites
 
-- Docker and Docker Compose
-- Groq API Key ([get one here](https://console.groq.com))
-- Telegram Bot Token (optional, for bot integration)
+- Python **3.11** (cu `pip` și `venv`)
+- Node.js **18+** și `npm`
+- SQLite (implicit) sau un Postgres accesibil dacă setezi `DATABASE_URL`
+- Groq API key + Telegram Bot Token
 
-### Installation
+### Instalare & rulare
 
-1. **Clone the repository**
 ```bash
-git clone <repository-url>
+git clone <repo>
 cd TelegramBotAI
+
+cp .env.example .env                  # sau ./scripts/bootstrap_env.sh
+# completează GROQ_API_KEY, TELEGRAM_BOT_TOKEN, ENCRYPTION_KEY etc.
+
+npm install                           # instalează frontend-ul + unelte
+npm run bootstrap                     # pregătește venv-ul Python + migrațiile
+npm run dev                           # pornește FastAPI (8000) + Next.js (3000)
 ```
 
-2. **Configure environment variables**
-```bash
-cp .env.example .env
-# sau rulează wizard-ul: ./scripts/bootstrap_env.sh
-```
+- `npm run bootstrap` rulează `scripts/backend_setup.sh`: creează `./venv`, instalează `requirements-local.txt`, aplică migrațiile din `migrations/`.
+- `npm run dev` folosește `concurrently` pentru a porni backend-ul (`uvicorn app.main:app --reload`) și interfața Next.js (`expense-web`).
+- Dacă nu setezi `DATABASE_URL`, se va folosi local `sqlite:///./expensebot.db`. Șterge fișierul `expensebot.db` dacă vrei un reset rapid și rulează din nou `npm run bootstrap`.
 
-Edit `.env` and add your credentials:
-```env
-DATABASE_URL=postgresql://expenseuser:expensepass@db:5432/expensebot
-GROQ_API_KEY=your_groq_api_key_here
-TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
-ENCRYPTION_KEY=your_base64_encoded_32_byte_key
-JWT_SECRET_KEY=your_jwt_secret_key
-DOMAIN=example.com
-WEB_DOMAIN=example.com
-NEXT_PUBLIC_API_URL=https://example.com/api
-API_BASE_URL=http://app:8000
-```
+### Scripturi utile
 
-- `DOMAIN` este domeniul care pointează spre server (FastAPI + Next.js).
-- `WEB_DOMAIN` poate fi același cu `DOMAIN` (totul pe un singur host) sau un subdomeniu separat pentru UI.
-- `NEXT_PUBLIC_API_URL` este URL-ul public folosit de browser (implicit `https://DOMAIN/api`).
-- `API_BASE_URL` is the internal URL that the Next.js server components use when running inside Docker (defaults to `http://app:8000`).
-- For a detailed description of every variable see [`ENVIRONMENT.md`](ENVIRONMENT.md).
+| Comandă | Ce face |
+| --- | --- |
+| `npm run backend:setup` | Doar configurează venv-ul + migrațiile (pas din `bootstrap`) |
+| `npm run backend:dev` | Pornește doar FastAPI (ideal pentru debugging API) |
+| `npm run web:dev` | Pornește doar Next.js |
+| `npm run web:build` | Build de producție pentru UI (`expense-web/.next`) |
+| `npm run web:start` | Rulează build-ul de producție |
 
-3. **Start the application**
-```bash
-docker-compose up --build
-```
+> Pentru development local setează în `.env`: `NEXT_PUBLIC_API_URL=http://localhost:8000/api` și `API_BASE_URL=http://localhost:8000`. Când expui aplicația în producție actualizează aceste valori la domeniul public al API-ului.
 
-The API will be available at `http://localhost:8000`
+### Deploy fără Docker
 
-4. **Run database migrations**
-```bash
-docker-compose exec app alembic upgrade head
-```
+1. Rulează `npm run backend:setup` pe server (creează venv-ul și aplică migrații).
+2. Pornește API-ul cu `source venv/bin/activate && uvicorn app.main:app --host 0.0.0.0 --port 8000` (sau configurează `gunicorn`/`supervisor`).
+3. Pentru UI: `npm run web:build && npm run web:start`.
+4. Montează în față un reverse proxy (Nginx, Caddy etc.) care trimite `/api/*` către FastAPI și restul către Next.js.
 
 ## API Documentation
 
@@ -198,33 +154,28 @@ TelegramBotAI/
 │   │   └── crypto.py
 │   └── main.py           # FastAPI app
 ├── migrations/           # Alembic migrations
+├── scripts/              # npm helper scripts (backend_setup, backend_dev, etc.)
+├── expense-web/          # Next.js dashboard
 ├── tests/                # Unit tests
-├── docker-compose.yml
-├── Dockerfile
-└── requirements.txt
+├── requirements-local.txt
+└── package.json
 ```
 
 ### Running Tests
 
 ```bash
-# Install dev dependencies
-pip install pytest pytest-asyncio
-
-# Run tests
-pytest tests/
+source venv/bin/activate                   # după npm run backend:setup
+pip install -r requirements-local.txt
+pytest tests
 ```
 
 ### Database Migrations
 
 ```bash
-# Create new migration
-docker-compose exec app alembic revision --autogenerate -m "description"
-
-# Apply migrations
-docker-compose exec app alembic upgrade head
-
-# Rollback
-docker-compose exec app alembic downgrade -1
+source venv/bin/activate
+alembic revision --autogenerate -m "description"
+alembic upgrade head        # apply
+alembic downgrade -1        # rollback
 ```
 
 ## Security
@@ -266,7 +217,7 @@ All Groq endpoints return a consistent JSON structure:
 ## Roadmap
 
 ### MVP (Completed)
-- ✅ Docker infrastructure
+- ✅ npm + FastAPI toolchain (venv + Next.js)
 - ✅ Database models and migrations
 - ✅ AES-GCM encryption
 - ✅ Groq AI integration

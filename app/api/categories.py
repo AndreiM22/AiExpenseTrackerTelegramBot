@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from typing import List
@@ -68,6 +68,11 @@ async def list_categories(
     ).all()
 
     return categories
+
+
+@router.options("", include_in_schema=False)
+async def categories_root_options():
+    return Response(status_code=200)
 
 
 @router.get("/{category_id}", response_model=CategoryResponse)
@@ -206,3 +211,8 @@ async def suggest_category(
             icon=fallback["icon"],
             color=fallback["color"]
         )
+
+
+@router.options("/suggest", include_in_schema=False)
+async def suggest_category_options():
+    return Response(status_code=200)

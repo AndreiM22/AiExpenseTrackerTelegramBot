@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from app.api import expenses, categories, auth, webhook, statistics
 from app.utils.config import settings
@@ -24,6 +24,12 @@ app.include_router(expenses.router, prefix="/api/v1/expenses", tags=["Expenses"]
 app.include_router(categories.router, prefix="/api/v1/categories", tags=["Categories"])
 app.include_router(statistics.router, prefix="/api/v1/statistics", tags=["Statistics"])
 app.include_router(webhook.router, prefix="/api/v1/telegram", tags=["Telegram Bot"])
+
+
+@app.options("/{path:path}")
+async def global_options_handler(path: str):
+    """Return 200 for any CORS preflight requests."""
+    return Response(status_code=200)
 
 @app.get("/")
 async def root():
