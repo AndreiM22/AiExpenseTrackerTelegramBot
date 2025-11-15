@@ -1,33 +1,36 @@
-import { auth } from "@/auth";
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
-export default auth((req) => {
-  const { nextUrl, auth: session } = req;
-  const isLoggedIn = !!session;
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
 
   // Public routes that don't require authentication
   const isPublicRoute =
-    nextUrl.pathname.startsWith("/api/auth") ||
-    nextUrl.pathname === "/login" ||
-    nextUrl.pathname.startsWith("/_next/static") ||
-    nextUrl.pathname.startsWith("/_next/image") ||
-    nextUrl.pathname === "/favicon.ico";
+    pathname.startsWith("/api/auth") ||
+    pathname === "/login" ||
+    pathname.startsWith("/_next") ||
+    pathname === "/favicon.ico";
 
   // Allow public routes
   if (isPublicRoute) {
     return NextResponse.next();
   }
 
+  // Check for session token in cookies
+  const sessionToken =
+    request.cookies.get("next-auth.session-token") ||
+    request.cookies.get("__Secure-next-auth.session-token");
+
   // Redirect to login if not authenticated
-  if (!isLoggedIn) {
-    const loginUrl = new URL("/login", nextUrl.origin);
-    loginUrl.searchParams.set("callbackUrl", nextUrl.pathname);
+  if (!sessionToken) {
+    const loginUrl = new URL("/login", request.url);
+    loginUrl.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
   // Allow authenticated users to proceed
   return NextResponse.next();
-});
+}
 
 export const config = {
   matcher: [
