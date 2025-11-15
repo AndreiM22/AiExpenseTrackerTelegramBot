@@ -38,7 +38,9 @@
       "Bash(/usr/local/bin/docker compose -f docker-compose.prod.yml build)",
       "Bash(/usr/local/bin/docker compose -f docker-compose.prod.yml logs app --tail=20)",
       "Bash(/usr/local/bin/docker compose -f docker-compose.prod.yml logs web --tail=30)",
-      "Bash(/usr/local/bin/docker compose -f docker-compose.prod.yml down)"
+      "Bash(/usr/local/bin/docker compose -f docker-compose.prod.yml down)",
+      "Bash(export SSHPASS='79aAMJvfMaeV')",
+      "Bash(sshpass -e ssh:*)"
     ],
     "deny": [],
     "ask": []
