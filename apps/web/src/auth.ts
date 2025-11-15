@@ -1,4 +1,4 @@
-import NextAuth from "next-auth";
+import NextAuth, { type AuthOptions } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 
 type CredentialsProps = Record<"email" | "password", string>;
@@ -30,7 +30,7 @@ const credentialsProvider = Credentials({
   },
 });
 
-const authConfig = {
+const authConfig: AuthOptions = {
   providers: [credentialsProvider],
   session: {
     strategy: "jwt",
