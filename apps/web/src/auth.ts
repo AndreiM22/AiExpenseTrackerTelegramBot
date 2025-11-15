@@ -34,11 +34,33 @@ const authConfig: AuthOptions = {
   providers: [credentialsProvider],
   session: {
     strategy: "jwt",
+    maxAge: 24 * 60 * 60, // 24 hours in seconds
   },
   pages: {
     signIn: "/login",
   },
   secret: process.env.NEXTAUTH_SECRET,
+  callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id;
+        token.email = user.email;
+        token.name = user.name;
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      if (token) {
+        session.user = {
+          ...session.user,
+          id: token.id as string,
+          email: token.email as string,
+          name: token.name as string,
+        };
+      }
+      return session;
+    },
+  },
 };
 
 const nextAuth = NextAuth(authConfig);
