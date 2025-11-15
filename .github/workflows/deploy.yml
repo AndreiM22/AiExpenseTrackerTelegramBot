@@ -29,15 +29,49 @@ jobs:
         run: docker push $IMAGE_NAME
 
       - name: Deploy over SSH
-        if: ${{ secrets.DEPLOY_HOST && secrets.DEPLOY_USER && secrets.DEPLOY_KEY }}
+        if: ${{ secrets.DEPLOY_HOST != '' && secrets.DEPLOY_USER != '' && secrets.DEPLOY_KEY != '' }}
         uses: appleboy/ssh-action@v1.0.0
+        env:
+          IMAGE: ${{ env.IMAGE_NAME }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
+          envs: IMAGE
           script: |
             set -e
+            echo "🚀 Deploying Expense Bot AI..."
             cd /opt/expensebot
-            docker pull $IMAGE_NAME
-            IMAGE_NAME=$IMAGE_NAME docker compose -f docker-compose.prod.yml down
-            IMAGE_NAME=$IMAGE_NAME docker compose -f docker-compose.prod.yml up -d
+
+            # Check if .env.production exists
+            if [ ! -f "apps/web/.env.production" ]; then
+              echo "❌ Error: apps/web/.env.production not found on server!"
+              echo "Please create it manually before deploying."
+              exit 1
+            fi
+
+            # Pull latest image
+            echo "📦 Pulling Docker image: $IMAGE"
+            docker pull $IMAGE
+
+            # Stop and remove old containers
+            echo "🛑 Stopping old containers..."
+            IMAGE_NAME=$IMAGE docker compose -f docker-compose.prod.yml down || true
+
+            # Start new containers
+            echo "▶️  Starting new containers..."
+            IMAGE_NAME=$IMAGE docker compose -f docker-compose.prod.yml up -d
+
+            # Wait for health check
+            echo "⏳ Waiting for application to be healthy..."
+            sleep 10
+
+            # Check if container is running
+            if docker compose -f docker-compose.prod.yml ps | grep -q "Up"; then
+              echo "✅ Deployment successful!"
+              docker compose -f docker-compose.prod.yml ps
+            else
+              echo "❌ Deployment failed! Container not running."
+              docker compose -f docker-compose.prod.yml logs --tail=50
+              exit 1
+            fi

@@ -1,9 +1,11 @@
-import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 
+// Use DATABASE_URL from environment - required in production
+// In Docker: file:/data/prisma/dev.db
+// In local dev: file:./prisma/dev.db (from .env)
 if (!process.env.DATABASE_URL) {
-  const dbPath = path.join(process.cwd(), "prisma", "dev.db");
-  process.env.DATABASE_URL = `file:${dbPath}`;
+  // Fallback for local development only
+  process.env.DATABASE_URL = "file:./prisma/dev.db";
 }
 
 const globalForPrisma = globalThis as unknown as {
@@ -19,3 +21,5 @@ export const prisma =
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
 }
+
+export default prisma;
