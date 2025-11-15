@@ -29,9 +29,10 @@ async function getTransactionsData(): Promise<{
 
 export default async function TransactionsPage() {
   const { expenses, categories } = await getTransactionsData();
+  const userName = "Expense Admin";
 
   return (
-    <DashboardShell>
+    <DashboardShell userName={userName}>
       <div className="space-y-6">
         <div>
           <p className="text-xs uppercase tracking-[0.35em] text-white/50">
