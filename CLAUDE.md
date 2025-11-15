@@ -4,146 +4,230 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Expense Bot AI** - A multi-platform expense tracking bot with AI-powered data extraction using Groq AI. The bot allows users to input expenses through:
-- Photo receipts (Groq vision model extracts data)
-- Voice messages (Groq speech-to-text with understanding)
-- Manual text input (Groq LLM normalizes and categorizes)
+**Expense Bot AI** - A Next.js-based expense tracking application with AI-powered data extraction using Groq AI. The application runs entirely on **Next.js 16 (App Router)** with TypeScript, eliminating the need for separate FastAPI backend or Docker for local development.
 
-## Current Status
+## Current Architecture
 
-This repository is in the **planning phase**. No code has been implemented yet. The repository contains:
-- Comprehensive task breakdown ([task.md](task.md))
-- Technical architecture specification ([tehnical-tasl.md](tehnical-tasl.md))
-- Groq API reference documentation ([usegroq.md](usegroq.md))
-- Environment configuration template ([.env](.env))
+### Tech Stack
+- **Framework**: Next.js 16 (App Router) + React 19 + TypeScript
+- **Database**: Prisma + SQLite (dev.db) with planned Postgres support
+- **Authentication**: NextAuth v4 with Credentials provider
+- **AI Integration**: Groq SDK for manual expense parsing
+- **Styling**: Tailwind CSS 4
+- **Testing**: Vitest with coverage
+- **Deployment**: Vercel (serverless) or Docker (self-hosted)
 
-## Planned Architecture
+### Monorepo Structure
+```
+TelegramBotAI/
+├── apps/web/              # Main Next.js application
+│   ├── src/
+│   │   ├── app/          # Next.js App Router (pages + API routes)
+│   │   ├── components/   # React components (layout, dashboard, auth)
+│   │   ├── lib/          # Client utilities and types
+│   │   ├── server/       # Server-side services
+│   │   │   ├── ai/       # Groq AI integration (manual-expense.ts)
+│   │   │   ├── mock-db.ts # In-memory data store with Prisma
+│   │   │   └── prisma.ts  # Prisma client singleton
+│   │   └── auth.ts       # NextAuth configuration
+│   ├── prisma/
+│   │   ├── schema.prisma # Database schema (Category, Expense)
+│   │   └── dev.db        # SQLite database
+│   └── package.json      # Web app dependencies
+├── package.json          # Root proxy scripts
+└── vercel.json           # Vercel deployment config
+```
 
-### Backend Stack
-- **Framework**: Python + FastAPI
-- **Database**: PostgreSQL
-- **AI Layer**: Groq AI (vision, speech, and text models)
-- **Storage**: S3 or local filesystem
-- **Authentication**: JWT + Telegram/Matrix/Chatwoot ID mapping
-- **Encryption**: AES-GCM at application level
-- **Containerization**: Docker + docker-compose
+## Database Schema
 
-### Database Schema
+**Prisma models** ([apps/web/prisma/schema.prisma](apps/web/prisma/schema.prisma)):
+- **Category**: `id`, `name`, `color`, `icon`, `isDefault`, `expenses[]`
+- **Expense**: `id`, `ownerId`, `source`, `amount`, `currency`, `vendor`, `purchaseDate`, `categoryId`, `aiConfidence`, `metadata` (JSON)
 
-Three core models:
-1. **users** - User accounts with display_name, telegram mapping
-2. **categories** - User-customizable expense categories (name, color, icon)
-3. **expenses** - Expense records with:
-   - Source type (photo | voice | manual)
-   - Financial data (amount, currency, vendor, date)
-   - Category reference
-   - Encrypted json_data field with AI-parsed details
-   - AI confidence score
+The application auto-seeds demo data on first API request via `ensureSeedData()` in [apps/web/src/server/mock-db.ts](apps/web/src/server/mock-db.ts).
 
-### API Endpoints (Planned)
+## Development Commands
 
-**Expense Management:**
-- `POST /api/v1/expenses/photo` - Upload receipt photo
-- `POST /api/v1/expenses/voice` - Upload voice message
-- `POST /api/v1/expenses/manual` - Submit text input
+All commands are run from the repository root and proxy to `apps/web`:
+
+```bash
+# Development
+npm run dev              # Start Next.js dev server on http://localhost:3000
+
+# Code Quality
+npm run lint             # Run ESLint
+npm run format           # Run Prettier
+npm run test             # Run Vitest tests with coverage
+
+# Production
+npm run build            # Build for production
+npm run start            # Start production server
+```
+
+**Working directly in apps/web**:
+```bash
+cd apps/web
+npm run dev
+npm run test
+npx prisma studio        # Open Prisma Studio to inspect SQLite DB
+npx prisma generate      # Regenerate Prisma client after schema changes
+```
+
+## Environment Configuration
+
+Copy [apps/web/.env.example](apps/web/.env.example) to `apps/web/.env`:
+
+**Required variables**:
+- `NEXTAUTH_SECRET` - Random secret for NextAuth JWT signing
+- `ADMIN_EMAIL` / `ADMIN_PASSWORD` - Login credentials for demo auth
+- `DATABASE_URL` - SQLite path (`file:./prisma/dev.db`) or Postgres URL
+
+**Optional integrations**:
+- `GROQ_API_KEY` - Enable real Groq AI for manual expense parsing
+- `TELEGRAM_BOT_TOKEN` - Enable Telegram webhook integration
+- `TELEGRAM_WEBHOOK_SECRET` - Verify Telegram webhook requests
+- `ENABLE_TELEGRAM_BOT=true` - Toggle Telegram bot features
+
+**Important**: `NEXT_PUBLIC_API_URL` and `API_BASE_URL` should point to the domain (e.g., `http://localhost:3000`) **without** `/api` suffix.
+
+## Authentication
+
+- **Login route**: `/login` (NextAuth Credentials provider)
+- **Middleware**: [apps/web/src/auth.ts](apps/web/src/auth.ts) protects all routes except `/login` and `/api/auth/*`
+- **Session**: JWT-based with 24-hour expiration
+- **User context**: Available via `next-auth` session in Server Components and API routes
+
+## API Routes
+
+All routes are in `apps/web/src/app/api/` and return JSON:
+
+**Expenses**:
 - `GET /api/v1/expenses` - List user expenses
+- `GET /api/v1/expenses/[id]` - Get single expense
+- `PUT /api/v1/expenses/[id]` - Update expense
+- `DELETE /api/v1/expenses/[id]` - Delete expense
+- `POST /api/v1/expenses/manual/preview` - Parse manual text input with Groq AI
+- `POST /api/v1/expenses/manual/confirm` - Save parsed expense
 
-**Category Management:**
-- `POST /api/v1/categories` - Create custom category
-- `GET /api/v1/categories` - List user categories
-- `PUT /api/v1/categories/{id}` - Update category
-- `DELETE /api/v1/categories/{id}` - Delete category
+**Categories**:
+- `GET /api/v1/categories` - List categories
+- `POST /api/v1/categories` - Create category
+- `PUT /api/v1/categories/[id]` - Update category
+- `DELETE /api/v1/categories/[id]` - Delete category
+- `POST /api/v1/categories/suggest` - AI-suggest categories
 
-**Authentication:**
-- `POST /auth/telegram_bind` - Link Telegram account
+**Statistics**:
+- `GET /api/v1/statistics/summary` - Total/average expenses
+- `GET /api/v1/statistics/by_category` - Group by category
+- `GET /api/v1/statistics/by_vendor` - Group by vendor
+- `GET /api/v1/statistics/trend` - Daily/weekly/monthly trends
+
+**Telegram**:
+- `POST /api/telegram/webhook` - Telegram bot webhook handler
 
 ## Groq AI Integration
 
-### Expected JSON Response Format
-All Groq AI endpoints (photo/voice/manual) return uniform JSON:
-```json
-{
-  "amount": 249.90,
-  "currency": "MDL",
-  "vendor": "Linella",
-  "purchase_date": "2025-11-02",
-  "category": "Groceries",
-  "items": [
-    {"name": "Cafea Lavazza", "qty": 1, "price": 199.9},
-    {"name": "Lapte", "qty": 1, "price": 50}
-  ],
-  "notes": "Bon fiscal",
-  "language": "ro",
-  "confidence": 0.94
-}
+The AI service is in [apps/web/src/server/ai/manual-expense.ts](apps/web/src/server/ai/manual-expense.ts):
+
+- **Model**: `llama-3.3-70b-versatile` (configurable via `GROQ_MANUAL_MODEL`)
+- **Input**: Plain text expense description (e.g., "Bought coffee at Starbucks for 45 lei")
+- **Output**: Structured JSON with `vendor`, `amount`, `currency`, `category`, `items[]`, `confidence`
+- **Fallback**: If `GROQ_API_KEY` is not set, uses local heuristic parsing
+
+The preview/confirm flow:
+1. `POST /api/v1/expenses/manual/preview` - Calls Groq AI, returns structured data
+2. User reviews/edits in UI
+3. `POST /api/v1/expenses/manual/confirm` - Saves to database
+
+## Testing
+
+Vitest is configured with:
+- **Config**: [apps/web/vitest.config.ts](apps/web/vitest.config.ts)
+- **Tests**: `src/**/*.{test,spec}.ts`
+- **Coverage**: Text + lcov reports
+- **Database**: Uses same SQLite `dev.db`, reset before each test suite
+
+Run tests:
+```bash
+npm run test             # Run all tests with coverage
+cd apps/web && npm test  # Same, from web directory
 ```
 
-### Service Structure
-Create `services/groq_client.py` with:
-- `parse_photo(file_path: str) -> dict` - Vision model for receipt OCR
-- `parse_voice(file_path: str) -> dict` - Speech-to-text with understanding
-- `parse_text(text: str, categories: list[str]) -> dict` - Text normalization
+## Deployment
 
-### Category Context
-When calling Groq AI, pass user's custom categories in the prompt/context so the model aligns category suggestions with user preferences.
+### Vercel (Recommended)
+1. Push to GitHub and connect repository in Vercel dashboard
+2. Set environment variables in Vercel project settings
+3. Deploy automatically on push to `main`, or manually via `vercel --prod`
 
-## Development Roadmap (MVP Tasks)
+Vercel config ([vercel.json](vercel.json)) handles monorepo install and build.
 
-### Phase 1: Infrastructure (MVP-001 to MVP-003)
-- Docker setup with FastAPI, Postgres, Redis
-- SQLAlchemy models + Alembic migrations
-- AES-GCM encryption utilities
+### Docker (Self-hosted)
+1. Copy `apps/web/.env.production.example` to `apps/web/.env.production`
+2. Set production environment variables (use `DATABASE_URL="file:/data/prisma/dev.db"` for persistence)
+3. Deploy:
+   ```bash
+   docker compose -f docker-compose.prod.yml up -d
+   ```
+4. Update:
+   ```bash
+   git pull
+   docker compose -f docker-compose.prod.yml up -d --build
+   ```
 
-### Phase 2: Groq Integration (MVP-004 to MVP-006)
-- Groq client service with retry/logging
-- FastAPI endpoints for all input types
-- Parse and save encrypted expense data
+### GitHub Actions CI/CD
+Workflow at `.github/workflows/deploy.yml`:
+- Builds Docker image on push to `main`
+- Pushes to GitHub Container Registry (`ghcr.io`)
+- Optionally deploys to remote server via SSH if secrets are configured
 
-### Phase 3: Categories (MVP-007 to MVP-008)
-- CRUD endpoints for custom categories
-- Integrate user categories into Groq prompts
+## Key Implementation Notes
 
-### Phase 4: Security (MVP-009 to MVP-010)
-- JWT authentication + Telegram binding
-- User/group-based permissions and data isolation
+### NextAuth Middleware
+NextAuth middleware is configured in [apps/web/src/auth.ts](apps/web/src/auth.ts). For Vercel/Turbopack compatibility, the middleware logic is in [apps/web/proxy.ts](apps/web/proxy.ts).
 
-### Phase 5: Testing & Deployment (MVP-011 to MVP-012)
-- Unit tests for crypto, parsers, endpoints
-- E2E permission tests
-- Docker production deployment with health checks
-
-See [task.md](task.md) for detailed subtasks and acceptance criteria.
-
-## Security Considerations
-
-- **Encryption**: All sensitive fields (json_data, vendor) encrypted with AES-GCM
-- **Data Isolation**: Each user sees only their own expenses via `owner_user_id` filtering
-- **Group Permissions**: Optional group sharing with RBAC (viewer/editor/admin)
-- **API Keys**: Groq API key and encryption keys stored in environment variables
-- **JWT Tokens**: 24-hour expiration
-
-## Environment Variables
-
-Required variables in `.env`:
-```
-GROQAPIKEY=<your-groq-api-key>
-telegramToken=<your-telegram-bot-token>
-DATABASE_URL=postgresql://user:pass@db:5432/expensebot
-ENCRYPTION_KEY=<aes-encryption-key>
+### Prisma Client
+Always use the singleton from [apps/web/src/server/prisma.ts](apps/web/src/server/prisma.ts) to prevent connection exhaustion:
+```typescript
+import prisma from "@/server/prisma";
 ```
 
-## When Implementing
+### Mock Data Store
+The current implementation uses [apps/web/src/server/mock-db.ts](apps/web/src/server/mock-db.ts) which provides an in-memory store backed by Prisma. This can be replaced with direct Prisma queries when ready for production.
 
-1. **Start with infrastructure**: Set up Docker, FastAPI, PostgreSQL first
-2. **Test encryption early**: Implement and test crypto utilities before building endpoints
-3. **Groq API calls**: Reference [usegroq.md](usegroq.md) for API specifications
-4. **Follow task order**: Tasks in [task.md](task.md) are dependency-ordered
-5. **Security first**: Never skip encryption or permission checks
-6. **User categories**: Always pass user's custom categories to Groq AI for better categorization
+### Server-Only Imports
+All server code (Prisma, Groq client) is marked with `"use server"` or imported only in API routes. Tests use a shim ([apps/web/src/test-utils/server-only-shim.ts](apps/web/src/test-utils/server-only-shim.ts)) to bypass Next.js server-only checks.
 
-## Post-MVP Features
+## Migration from Python/FastAPI
 
-- CSV export by date/category range
-- Web dashboard (React/Next.js)
-- Google Sheets sync
-- Daily expense summary notifications
+This codebase was migrated from a Python/FastAPI backend. The following have been removed:
+- All Python code (`app/`, `migrations/`, `requirements.txt`, `alembic.ini`)
+- Docker setup for local dev (Docker still used for production deployment)
+- FastAPI endpoints (replaced with Next.js API routes)
+
+See [TASKS_CLEANUP.md](TASKS_CLEANUP.md) for migration status.
+
+## Current Development Status
+
+**Completed**:
+- Next.js 16 + TypeScript setup with App Router
+- Prisma + SQLite database with auto-seeding
+- NextAuth authentication with middleware protection
+- Full CRUD API routes for expenses and categories
+- Groq AI integration for manual expense parsing
+- Telegram webhook handler
+- Vitest test suite with coverage
+- Docker production deployment
+- Vercel deployment configuration
+
+**Pending** (see [TASKS_CLEANUP.md](TASKS_CLEANUP.md)):
+- Final verification of all UI flows
+- Production deployment testing
+- Photo/voice expense parsing (requires Groq vision/speech models)
+
+## Additional Documentation
+
+- [README.md](README.md) - Setup instructions and features (in Romanian)
+- [TASKS_CLEANUP.md](TASKS_CLEANUP.md) - Migration checklist
+- [DEPLOY_SERVER.md](DEPLOY_SERVER.md) - Server deployment guide
+- [usegroq.md](usegroq.md) - Groq API reference
