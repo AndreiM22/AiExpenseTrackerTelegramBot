@@ -7,6 +7,7 @@ export function middleware(request: NextRequest) {
   // Public routes that don't require authentication
   const isPublicRoute =
     pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/api/telegram") ||  // Telegram webhook must be public
     pathname === "/login" ||
     pathname.startsWith("/_next") ||
     pathname === "/favicon.ico";
