@@ -5,14 +5,15 @@ FROM base AS deps
 RUN apk add --no-cache libc6-compat
 COPY package*.json ./
 COPY apps/web/package*.json apps/web/
-RUN npm install && npm install --prefix apps/web
+COPY apps/web/package-lock.json apps/web/
+RUN npm install --ignore-scripts \
+ && cd apps/web && npm install --ignore-scripts
 
 FROM base AS builder
 ENV NODE_ENV=production
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
+COPY --from=deps /app /app
 COPY . .
-RUN npx prisma generate --schema apps/web/prisma/schema.prisma
+RUN cd apps/web && npx prisma generate --schema prisma/schema.prisma
 RUN npm run build
 
 FROM node:20-alpine AS runner
