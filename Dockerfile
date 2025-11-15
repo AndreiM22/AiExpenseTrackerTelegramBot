@@ -10,21 +10,21 @@ RUN npm install --ignore-scripts \
  && cd apps/web && npm install --ignore-scripts
 
 FROM base AS builder
-ENV NODE_ENV=production
+ENV NODE_ENV=development
 COPY --from=deps /app /app
 COPY . .
 RUN cd apps/web && npx prisma generate --schema prisma/schema.prisma
-RUN npm run build
+RUN cd apps/web && npm run build
 
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 RUN apk add --no-cache libc6-compat && mkdir -p /data/prisma
-COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/apps/web/package*.json ./apps/web/
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/apps/web/node_modules ./apps/web/node_modules
+COPY package*.json ./
+COPY apps/web/package*.json ./apps/web/
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
 COPY --from=builder /app/apps/web/.next ./apps/web/.next
 COPY --from=builder /app/apps/web/public ./apps/web/public
 COPY --from=builder /app/apps/web/next.config.ts ./apps/web/
