@@ -5,7 +5,7 @@ FROM base AS deps
 RUN apk add --no-cache libc6-compat
 COPY package*.json ./
 COPY apps/web/package*.json apps/web/
-RUN npm install
+RUN npm install && npm install --prefix apps/web
 
 FROM base AS builder
 ENV NODE_ENV=production
