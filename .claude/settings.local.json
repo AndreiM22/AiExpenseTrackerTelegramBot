@@ -26,7 +26,14 @@
       "Bash(/usr/local/bin/docker compose logs app --tail=20)",
       "Bash(tree:*)",
       "Bash(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@65.21.110.105 \"uname -a && cat /etc/os-release && df -h && free -m\")",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(node -e:*)",
+      "Bash(npm run build:*)",
+      "Bash(lsof:*)",
+      "Bash(xargs:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push)"
     ],
     "deny": [],
     "ask": []
