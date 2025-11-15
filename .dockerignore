@@ -1,62 +1,13 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
-venv/
-ENV/
-.venv
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-
-# Documentation
-*.md
-docs/
-
-# Git
-.git/
-.gitignore
-.gitattributes
-
-# Docker
-Dockerfile*
-docker-compose*.yml
-.dockerignore
-
-# Environment
+.git
+.github
+node_modules
+apps/web/node_modules
+apps/web/.next
+.next
+apps/web/prisma/dev.db
 .env
-.env.*
-*.env
-
-# Logs
-*.log
-logs/
-
-# Uploads
-uploads/
-
-# Database
-*.db
-*.sqlite
-
-# OS
+apps/web/.env*
+data
+coverage
+Dockerfile.old
 .DS_Store
-Thumbs.db
-
-# Temporary files
-*.tmp
-*.bak
-*.swp

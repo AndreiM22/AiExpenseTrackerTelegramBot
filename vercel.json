@@ -1,0 +1,16 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "installCommand": "npm install && npm install --prefix apps/web",
+  "buildCommand": "npm run build",
+  "outputDirectory": "apps/web/.next",
+  "rewrites": [
+    { "source": "/api/telegram", "destination": "/api/telegram" }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "no-store" }]
+    }
+  ]
+}

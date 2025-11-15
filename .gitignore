@@ -1,13 +1,28 @@
+# Root node modules (only apps/web contains deps now)
 node_modules/
-expense-web/node_modules/
-venv/
-.venv/
-__pycache__/
-*.py[cod]
-*.sqlite3
-npm-debug.log*
+
+# Next.js outputs
+apps/web/node_modules/
+apps/web/.next/
+apps/web/out/
+apps/web/.turbo/
+apps/web/coverage/
+apps/web/prisma/*.db
+apps/web/prisma/*.db-journal
+
+# Editor/OS noise
 .DS_Store
+*.log
+
+# Environment files
 .env.local
 .env.development
 .env.production.local
 .env.test.local
+.env
+.env.*
+
+# Generated build artifacts
+dist/
+.vercel/
+*.tsbuildinfo

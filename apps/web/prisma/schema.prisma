@@ -1,0 +1,33 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Category {
+  id         String    @id @default(cuid())
+  name       String
+  color      String?
+  icon       String?
+  isDefault  Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+  expenses   Expense[]
+}
+
+model Expense {
+  id              String    @id @default(cuid())
+  ownerId         String
+  source          String
+  amount          Decimal   @default(0)
+  currency        String    @default("MDL")
+  vendor          String?
+  purchaseDate    DateTime?
+  aiConfidence    Float?
+  createdAt       DateTime  @default(now())
+  categoryId      String?
+  category        Category? @relation(fields: [categoryId], references: [id])
+  metadata        Json?
+}

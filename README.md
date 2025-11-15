@@ -1,250 +1,138 @@
-# Expense Bot AI
+# Expense Bot AI (Next.js Edition)
 
-AI-powered expense tracking bot that extracts expense data from photos, voice messages, and manual text input using Groq AI.
+Panoul Expense Bot AI rulează acum exclusiv pe **Next.js 16 (App Router)** cu API routes în TypeScript. Toate funcționalitățile de dashboard, management de categorii și generarea AI a cheltuielilor manuale rulează local în același proces – fără FastAPI, fără Docker.
 
-## Features
+## Ce este inclus
+- **UI & API unificate** în `apps/web` (Next.js + Tailwind + TypeScript)
+- **Prisma + SQLite data store** (`src/server/mock-db.ts` + `prisma/schema.prisma`) care gestionează categorii, cheltuieli și statistici (seed demo + CRUD real)
+- **Autentificare NextAuth** cu provider Credentials și middleware care protejează UI + API
+- **Teste automatizate** cu Vitest pentru logica critică din store
+- **Design React 19 / Tailwind 4** cu componente moderne (dashboard, tables, charts, dialogs)
 
-- **Photo Receipt Scanning**: Upload receipt photos - Groq vision AI extracts all expense details
-- **Voice Input**: Record voice messages - Groq speech model transcribes and parses expenses
-- **Manual Text Entry**: Type expenses naturally - AI normalizes and categorizes automatically
-- **Custom Categories**: Define your own expense categories with colors and icons
-- **End-to-End Encryption**: All sensitive data encrypted with AES-GCM
-- **Multi-platform**: Telegram bot integration ready
-- **Privacy First**: User data isolation with group sharing support
+## Setup rapid
+1. Clonează repo-ul și intră în director:
+   ```bash
+   git clone <repo>
+   cd TelegramBotAI
+   ```
+2. Copiază `.env.example` din `apps/web` în propriul `.env` (Next.js citește fișierul din același director):
+   ```bash
+   cp apps/web/.env.example apps/web/.env
+   # setează NEXTAUTH_SECRET, ADMIN_EMAIL, ADMIN_PASSWORD etc.
+   ```
+3. Instalează dependențele și rulează în modul development:
+   ```bash
+   npm install --prefix apps/web
+   npm run dev            # rulează Next.js pe http://localhost:3000
+   ```
 
-## Tech Stack
+> Poți folosi și scripturile din rădăcină (`npm run dev`, `npm run lint`, `npm run test`, `npm run build`) – toate proxiază spre `apps/web`.
 
-- **Backend**: Python 3.11 + FastAPI
-- **Database**: PostgreSQL 15
-- **AI**: Groq AI (LLaMA, Whisper, Vision models)
-- **Encryption**: AES-GCM with cryptography library
-- **ORM**: SQLAlchemy + Alembic migrations
-
-## Quick Start (npm + FastAPI, fără Docker)
-
-### Prerequisites
-
-- Python **3.11** (cu `pip` și `venv`)
-- Node.js **18+** și `npm`
-- SQLite (implicit) sau un Postgres accesibil dacă setezi `DATABASE_URL`
-- Groq API key + Telegram Bot Token
-
-### Instalare & rulare
-
-```bash
-git clone <repo>
-cd TelegramBotAI
-
-cp .env.example .env                  # sau ./scripts/bootstrap_env.sh
-# completează GROQ_API_KEY, TELEGRAM_BOT_TOKEN, ENCRYPTION_KEY etc.
-
-npm install                           # instalează frontend-ul + unelte
-npm run bootstrap                     # pregătește venv-ul Python + migrațiile
-npm run dev                           # pornește FastAPI (8000) + Next.js (3000)
-```
-
-- `npm run bootstrap` rulează `scripts/backend_setup.sh`: creează `./venv`, instalează `requirements-local.txt`, aplică migrațiile din `migrations/`.
-- `npm run dev` folosește `concurrently` pentru a porni backend-ul (`uvicorn app.main:app --reload`) și interfața Next.js (`expense-web`).
-- Dacă nu setezi `DATABASE_URL`, se va folosi local `sqlite:///./expensebot.db`. Șterge fișierul `expensebot.db` dacă vrei un reset rapid și rulează din nou `npm run bootstrap`.
-
-### Scripturi utile
-
-| Comandă | Ce face |
+## Variabile de mediu esențiale
+| Variable | Description |
 | --- | --- |
-| `npm run backend:setup` | Doar configurează venv-ul + migrațiile (pas din `bootstrap`) |
-| `npm run backend:dev` | Pornește doar FastAPI (ideal pentru debugging API) |
-| `npm run web:dev` | Pornește doar Next.js |
-| `npm run web:build` | Build de producție pentru UI (`expense-web/.next`) |
-| `npm run web:start` | Rulează build-ul de producție |
+| `NEXT_PUBLIC_APP_URL` | URL-ul public al aplicației (ex. `http://localhost:3000`) |
+| `NEXT_PUBLIC_API_URL` / `API_BASE_URL` | Baza pentru fetch-uri către API-ul Next (setată pe domeniu, ex. `http://localhost:3000`) |
+| `NEXTAUTH_SECRET` | Secret folosit de NextAuth pentru JWT-uri |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Credențialele de login (folosite de providerul Credentials) |
+| `GROQ_API_KEY`, `TELEGRAM_BOT_TOKEN`, `DATABASE_URL`, etc. | Placeholder-e pentru integrarea viitoare cu servicii reale |
 
-> Pentru development local setează în `.env`: `NEXT_PUBLIC_API_URL=http://localhost:8000/api` și `API_BASE_URL=http://localhost:8000`. Când expui aplicația în producție actualizează aceste valori la domeniul public al API-ului.
+> Notă: `NEXT_PUBLIC_API_URL` și `API_BASE_URL` trebuie să indice domeniul (fără `/api`). Rutele vor adăuga automat prefixul `/api/...`.
 
-### Deploy fără Docker
+## Autentificare
+- Ruta `/login` afișează formularul NextAuth (Credentials provider)
+- Middleware-ul NextAuth protejează toate rutele (UI + `/api/v1/*`) cu excepția `login` și `api/auth`
+- Utilizatorul logat este afișat în `HeaderBar`, iar `SignOutButton` (NextAuth) finalizează sesiunea
 
-1. Rulează `npm run backend:setup` pe server (creează venv-ul și aplică migrații).
-2. Pornește API-ul cu `source venv/bin/activate && uvicorn app.main:app --host 0.0.0.0 --port 8000` (sau configurează `gunicorn`/`supervisor`).
-3. Pentru UI: `npm run web:build && npm run web:start`.
-4. Montează în față un reverse proxy (Nginx, Caddy etc.) care trimite `/api/*` către FastAPI și restul către Next.js.
+## API Routes disponibile
+Toate rutele sunt disponibile local (mock data) și replicate în UI:
+- `GET/POST /api/v1/categories` + `PUT/DELETE /api/v1/categories/:id` + `POST /api/v1/categories/suggest`
+- `GET /api/v1/expenses`, `GET/PUT/DELETE /api/v1/expenses/:id`
+- `POST /api/v1/expenses/manual/preview`, `POST /api/v1/expenses/manual/confirm`
+- `GET /api/v1/statistics/summary`, `/by_category`, `/by_vendor`, `/trend`
 
-## API Documentation
+Aceste rute folosesc helper-ele din `src/server/mock-db.ts`, ceea ce face simplă înlocuirea lor cu un DB real (Prisma/Postgres, Supabase etc.) atunci când ești gata.
 
-Once running, visit:
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
+## Scripturi utile
+| Command | Ce face |
+| --- | --- |
+| `npm run dev` | Rulează Next.js în modul development |
+| `npm run lint` | Rulează ESLint pe `apps/web` |
+| `npm run test` | Rulează Vitest (testele din `src/server/*.test.ts`) |
+| `npm run build` | Build de producție + verifică proxy/api |
+| `npm run start` | Rulează build-ul (după `npm run build`) |
+| `npm run format` | Rulează Prettier pe cod |
 
-### Key Endpoints
+> **Prisma + SQLite**: primul request către API declanșează `ensureSeedData`, care creează automat tabelele și un set de date demo în `apps/web/prisma/dev.db`. Pentru un reset rapid rulează `npm run test` sau importă helperul `resetMockData()` într-un script.
 
-#### Expenses
-- `POST /api/v1/expenses/photo` - Upload receipt photo
-- `POST /api/v1/expenses/voice` - Upload voice message
-- `POST /api/v1/expenses/manual` - Submit text expense
-- `GET /api/v1/expenses` - List all expenses
+### Groq AI (manual text)
+1. Setează `GROQ_API_KEY` și (opțional) `GROQ_MANUAL_MODEL` în `.env`.
+2. `POST /api/v1/expenses/manual/preview` trimite textul spre Groq și primește JSON structurat (vendor, amount, items). Dacă cheia lipsește, sistemul folosește heuristica locală.
+3. `confirmManualExpense` salvează rezultatul în DB; Telegram reusează aceleași fluxuri pentru mesajele text.
 
-#### Categories
-- `POST /api/v1/categories` - Create category
-- `GET /api/v1/categories` - List categories
-- `PUT /api/v1/categories/{id}` - Update category
-- `DELETE /api/v1/categories/{id}` - Delete category
+### Telegram webhook
+- Setează `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` și `ENABLE_TELEGRAM_BOT=true`.
+- Configurează webhook-ul la `https://<domeniu>/api/telegram/webhook` și transmite `secret_token` identic cu `TELEGRAM_WEBHOOK_SECRET`.
+- Botul răspunde cu un rezumat după fiecare mesaj text și salvează cheltuiala.
 
-#### Authentication
-- `POST /auth/telegram_bind` - Bind Telegram account
-
-### Example Usage
-
-**Manual Text Entry:**
+## Testare
+Vitest este configurat cu alias pentru `server-only` și folosește același SQLite dev DB (resetat înaintea fiecărui test). Rularea testelor:
 ```bash
-curl -X POST "http://localhost:8000/api/v1/expenses/manual" \
-  -H "Content-Type: application/json" \
-  -d '{"text": "Am cumpărat cafea la Starbucks, 50 lei"}'
+npm run test
 ```
+Output-ul include un raport de coverage text + lcov (util pentru integrări CI).
 
-Response:
-```json
-{
-  "status": "success",
-  "expense_id": "123e4567-e89b-12d3-a456-426614174000",
-  "data": {
-    "amount": 50.0,
-    "currency": "MDL",
-    "vendor": "Starbucks",
-    "category": "Food",
-    "confidence": 0.95
-  }
-}
-```
-
-**Photo Upload:**
-```bash
-curl -X POST "http://localhost:8000/api/v1/expenses/photo" \
-  -F "file=@receipt.jpg"
-```
-
-**Create Custom Category:**
-```bash
-curl -X POST "http://localhost:8000/api/v1/categories" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Groceries",
-    "color": "#4CAF50",
-    "icon": "🛒"
-  }'
-```
-
-## Development
-
-### Project Structure
-
+## Structură actuală
 ```
 TelegramBotAI/
-├── app/
-│   ├── api/              # API endpoints
-│   │   ├── auth.py
-│   │   ├── categories.py
-│   │   ├── expenses.py
-│   │   └── schemas.py
-│   ├── models/           # SQLAlchemy models
-│   │   ├── user.py
-│   │   ├── category.py
-│   │   ├── expense.py
-│   │   └── database.py
-│   ├── services/         # Business logic
-│   │   └── groq_client.py
-│   ├── utils/            # Utilities
-│   │   ├── config.py
-│   │   └── crypto.py
-│   └── main.py           # FastAPI app
-├── migrations/           # Alembic migrations
-├── scripts/              # npm helper scripts (backend_setup, backend_dev, etc.)
-├── expense-web/          # Next.js dashboard
-├── tests/                # Unit tests
-├── requirements-local.txt
-└── package.json
+├── apps/
+│   └── web/
+│       ├── package.json (scripts Next.js)
+│       ├── next.config.ts, tsconfig.json, vitest.config.ts
+│       ├── src/
+│       │   ├── app/ (App Router: dashboard, login, API routes)
+│       │   ├── components/ (layout, dashboard, auth)
+│       │   ├── lib/ (fetch helpers, types)
+│       │   ├── server/ (Prisma services, Groq client, Telegram)
+│       │   └── proxy.ts, auth.ts etc.
+├── .env.example
+├── package.json (script proxy către apps/web)
+├── vercel.json (pipeline & build commands)
+├── docker-compose.prod.yml
+├── Dockerfile
+└── TASKS_CLEANUP.md (roadmap curent)
 ```
 
-### Running Tests
+## Deploy pe Vercel
+1. `vercel link` pentru a conecta proiectul.
+2. Adaugă variabilele de mediu (`vercel env add NEXTAUTH_SECRET`, `GROQ_API_KEY`, `TELEGRAM_BOT_TOKEN` etc.).
+3. Rulează `vercel --prod`. Configul din `vercel.json` rulează `npm run build`, iar `postinstall` din rădăcină instalează dependențele și în `apps/web`. `proxy.ts` înlocuiește middleware-ul clasic conform cerințelor Turbopack.
 
-```bash
-source venv/bin/activate                   # după npm run backend:setup
-pip install -r requirements-local.txt
-pytest tests
-```
+> Pentru Render/Fly rulează aceleași comenzi: `npm install`, `npm install --prefix apps/web`, `npm run build`, `npm run start`.
 
-### Database Migrations
+## Deploy pe Docker (server propriu)
+1. Copiază `apps/web/.env.production.example` în `apps/web/.env.production` și setează valorile (folosește domeniul real și setează `DATABASE_URL="file:/data/prisma/dev.db"` pentru persistență în container).
+2. Pe server:
+   ```bash
+   git clone <repo> /opt/expensebot
+   cd /opt/expensebot
+   docker compose -f docker-compose.prod.yml up -d
+   ```
+   Volumul `expensebot_data` păstrează baza SQLite în `/data/prisma/dev.db`.
+3. Actualizare manuală:
+   ```bash
+   git pull
+   docker compose -f docker-compose.prod.yml up -d --build
+   ```
 
-```bash
-source venv/bin/activate
-alembic revision --autogenerate -m "description"
-alembic upgrade head        # apply
-alembic downgrade -1        # rollback
-```
+## CI/CD (GitHub Actions + GHCR)
+- Workflow-ul `.github/workflows/deploy.yml` construiește imaginea Docker și o publică în GHCR pe fiecare push în `main`.
+- Dacă adaugi în repository secrets: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_KEY`, același workflow se conectează prin SSH la server (`/opt/expensebot`) și rulează `docker compose` pentru a trage și porni noua versiune (`IMAGE_NAME=$IMAGE_NAME docker compose ...`).
+- În `docker-compose.prod.yml`, serviciul `web` folosește imaginea generată (`ghcr.io/<org>/<repo>:latest`) sau reconstruiește local dacă rulezi manual.
 
-## Security
+## Roadmap următor
+- Adaugă NextAuth Providers suplimentare (OAuth, magic link etc.)
+- Extinde Groq AI pentru upload foto/audio și interacțiuni Telegram avansate
+- Automatizează pipeline-ul de deploy/monitorizare
 
-- **Encryption**: All sensitive data (vendor names, json_data) encrypted with AES-GCM
-- **User Isolation**: Each user sees only their own expenses
-- **Group Permissions**: Optional group sharing with role-based access
-- **JWT Authentication**: 24-hour token expiration
-- **Environment Variables**: Sensitive keys stored in .env (never committed)
-
-## Groq AI Integration
-
-### Models Used
-
-- **Text/Chat**: `llama-3.3-70b-versatile` - Expense parsing from text
-- **Vision**: `llama-3.2-90b-vision-preview` - Receipt OCR and parsing
-- **Speech**: `whisper-large-v3` - Voice transcription
-
-### Response Format
-
-All Groq endpoints return a consistent JSON structure:
-```json
-{
-  "amount": 250.50,
-  "currency": "MDL",
-  "vendor": "Kaufland",
-  "purchase_date": "2025-11-02",
-  "category": "Groceries",
-  "items": [
-    {"name": "Coffee", "qty": 1, "price": 199.90},
-    {"name": "Milk", "qty": 1, "price": 50.60}
-  ],
-  "notes": "Receipt info",
-  "language": "ro",
-  "confidence": 0.94
-}
-```
-
-## Roadmap
-
-### MVP (Completed)
-- ✅ npm + FastAPI toolchain (venv + Next.js)
-- ✅ Database models and migrations
-- ✅ AES-GCM encryption
-- ✅ Groq AI integration
-- ✅ Photo/Voice/Manual endpoints
-- ✅ Custom categories
-- ⚠️ JWT authentication (TODO)
-- ⚠️ User/group permissions (TODO)
-
-### Post-MVP
-- [ ] Telegram bot interface
-- [ ] CSV export functionality
-- [ ] Web dashboard (React/Next.js)
-- [ ] Google Sheets sync
-- [ ] Daily expense notifications
-- [ ] Multi-currency support
-- [ ] Expense analytics
-
-## License
-
-MIT
-
-## Contributing
-
-Contributions welcome! Please read CONTRIBUTING.md first.
-
-## Support
-
-For issues and questions:
-- GitHub Issues: [repository-url]/issues
-- Documentation: See [CLAUDE.md](CLAUDE.md) for development guide
+Pentru status curent și checklist detaliat folosește `TASKS_CLEANUP.md` – acolo bifăm fiecare etapă importantă.

@@ -1,144 +1,17 @@
+version: "3.9"
+
 services:
-  app:
+  web:
+    image: ${IMAGE_NAME:-expensebot-web:latest}
     build:
       context: .
-      dockerfile: Dockerfile
-      target: production
-      args:
-        PYTHON_VERSION: 3.11
-        APP_PORT: 8000
-    container_name: expense-bot-api-prod
-    expose:
-      - "8000"
-    volumes:
-      - uploads_data:/app/uploads
-      - logs_data:/app/logs
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
     env_file:
-      - .env
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_started
-    restart: always
-    networks:
-      - expense-bot-network
-    deploy:
-      resources:
-        limits:
-          cpus: "2"
-          memory: 2G
-        reservations:
-          cpus: "1"
-          memory: 512M
-
-  web:
-    build:
-      context: ./expense-web
-      dockerfile: Dockerfile
-      target: prod
-      args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
-        API_BASE_URL: ${API_BASE_URL:-http://app:8000}
-    container_name: expense-bot-web-prod
-    env_file:
-      - .env
-    environment:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
-      API_BASE_URL: ${API_BASE_URL:-http://app:8000}
-    depends_on:
-      app:
-        condition: service_started
-    expose:
-      - "3000"
-    restart: always
-    networks:
-      - expense-bot-network
-    deploy:
-      resources:
-        limits:
-          cpus: "1"
-          memory: 1G
-        reservations:
-          cpus: "0.25"
-          memory: 256M
-
-  db:
-    image: postgres:15-alpine
-    container_name: expense-bot-db-prod
-    environment:
-      POSTGRES_USER: ${DB_USER:-expenseuser}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-expensepass}
-      POSTGRES_DB: ${DB_NAME:-expensebot}
-    ports:
-      - "5432:5432"
+      - apps/web/.env.production
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-expenseuser} -d ${DB_NAME:-expensebot}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: always
-    networks:
-      - expense-bot-network
-
-  redis:
-    image: redis:7-alpine
-    container_name: expense-bot-redis-prod
-    ports:
-      - "6380:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-    restart: always
-    networks:
-      - expense-bot-network
-
-  nginx:
-    image: nginx:1.25-alpine
-    container_name: expense-bot-nginx
-    depends_on:
-      app:
-        condition: service_started
-      web:
-        condition: service_started
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/start-nginx.sh:/start-nginx.sh:ro
-      - ./nginx/ssl:/etc/letsencrypt:ro
-      - ./nginx/certbot-www:/var/www/certbot
-    environment:
-      DOMAIN: ${DOMAIN}
-      WEB_DOMAIN: ${WEB_DOMAIN}
-    command: ["/bin/sh", "/start-nginx.sh"]
-    restart: always
-    networks:
-      - expense-bot-network
-
-  certbot:
-    image: certbot/certbot
-    container_name: expense-bot-certbot
-    volumes:
-      - ./nginx/ssl:/etc/letsencrypt
-      - ./nginx/certbot-www:/var/www/certbot
-    entrypoint: ["tail", "-f", "/dev/null"]
-    restart: always
-    networks:
-      - expense-bot-network
+      - expensebot_data:/data
 
 volumes:
-  postgres_data:
-  redis_data:
-  uploads_data:
-  logs_data:
-
-networks:
-  expense-bot-network:
-    driver: bridge
+  expensebot_data:
