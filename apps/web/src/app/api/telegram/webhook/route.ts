@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
+import { writeFile, unlink } from "fs/promises";
+import { join } from "path";
+import { tmpdir } from "os";
 import { generateManualPreview } from "@/server/ai/manual-expense";
+import { transcribeVoice } from "@/server/ai/voice-expense";
 import { confirmManualExpense, listCategories } from "@/server/mock-db";
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -17,6 +21,37 @@ async function sendTelegramMessage(chatId: number, text: string) {
   }).catch((error) => {
     console.warn("Failed to send Telegram response", error);
   });
+}
+
+async function downloadTelegramFile(fileId: string): Promise<string> {
+  if (!BOT_TOKEN) {
+    throw new Error("Missing TELEGRAM_BOT_TOKEN");
+  }
+
+  // Get file path from Telegram
+  const fileInfoResponse = await fetch(
+    `https://api.telegram.org/bot${BOT_TOKEN}/getFile?file_id=${fileId}`
+  );
+  const fileInfo = await fileInfoResponse.json();
+
+  if (!fileInfo.ok || !fileInfo.result?.file_path) {
+    throw new Error("Failed to get file info from Telegram");
+  }
+
+  // Download file
+  const fileUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${fileInfo.result.file_path}`;
+  const fileResponse = await fetch(fileUrl);
+
+  if (!fileResponse.ok) {
+    throw new Error("Failed to download file from Telegram");
+  }
+
+  // Save to temp file
+  const buffer = Buffer.from(await fileResponse.arrayBuffer());
+  const tempFilePath = join(tmpdir(), `telegram_voice_${Date.now()}.ogg`);
+  await writeFile(tempFilePath, buffer);
+
+  return tempFilePath;
 }
 
 export async function POST(request: Request) {
@@ -42,30 +77,85 @@ export async function POST(request: Request) {
 
   const message = update.message || update.edited_message;
   const chatId = message?.chat?.id;
-  const text = message?.text?.trim();
 
-  if (!chatId || !text) {
+  if (!chatId) {
     return NextResponse.json({ ok: true });
   }
 
-  try {
-    const categories = await listCategories();
-    const preview = await generateManualPreview(text, { categories });
-    const saved = await confirmManualExpense({
-      source: "telegram",
-      parsed_data: preview.data,
-    });
+  const textMessage = message?.text?.trim();
+  const voiceMessage = message?.voice;
 
-    const summary = `✅ *Cheltuială salvată*
+  // Handle text messages
+  if (textMessage) {
+    try {
+      const categories = await listCategories();
+      const preview = await generateManualPreview(textMessage, { categories });
+      const saved = await confirmManualExpense({
+        source: "telegram",
+        parsed_data: preview.data,
+      });
+
+      const summary = `✅ *Cheltuială salvată*
 Vendor: *${saved.vendor}*
 Sumă: *${Number(saved.amount ?? 0).toFixed(2)} ${saved.currency ?? "MDL"}*
 Categorie: ${saved.category_name ?? "Fără categorie"}`;
 
-    await sendTelegramMessage(chatId, summary);
-  } catch (error) {
-    const messageText = error instanceof Error ? error.message : "Eroare neașteptată";
-    await sendTelegramMessage(chatId, `⚠️ ${messageText}`);
+      await sendTelegramMessage(chatId, summary);
+    } catch (error) {
+      const messageText = error instanceof Error ? error.message : "Eroare neașteptată";
+      await sendTelegramMessage(chatId, `⚠️ ${messageText}`);
+    }
+
+    return NextResponse.json({ ok: true });
   }
 
+  // Handle voice messages
+  if (voiceMessage) {
+    let tempFilePath: string | null = null;
+
+    try {
+      await sendTelegramMessage(chatId, "🎤 Procesez mesajul vocal...");
+
+      // Download voice file from Telegram
+      tempFilePath = await downloadTelegramFile(voiceMessage.file_id);
+
+      // Transcribe with Groq Whisper
+      const transcription = await transcribeVoice(tempFilePath);
+
+      if (!transcription.text) {
+        throw new Error("Nu am putut transcrie mesajul vocal.");
+      }
+
+      // Process transcribed text through Groq AI
+      const categories = await listCategories();
+      const preview = await generateManualPreview(transcription.text, { categories });
+      const saved = await confirmManualExpense({
+        source: "voice",
+        parsed_data: preview.data,
+      });
+
+      const summary = `✅ *Cheltuială salvată din mesaj vocal*
+Transcris: "${transcription.text}"
+Vendor: *${saved.vendor}*
+Sumă: *${Number(saved.amount ?? 0).toFixed(2)} ${saved.currency ?? "MDL"}*
+Categorie: ${saved.category_name ?? "Fără categorie"}`;
+
+      await sendTelegramMessage(chatId, summary);
+    } catch (error) {
+      const messageText = error instanceof Error ? error.message : "Eroare neașteptată";
+      await sendTelegramMessage(chatId, `⚠️ ${messageText}`);
+    } finally {
+      // Clean up temp file
+      if (tempFilePath) {
+        await unlink(tempFilePath).catch(() => {
+          // Ignore cleanup errors
+        });
+      }
+    }
+
+    return NextResponse.json({ ok: true });
+  }
+
+  // No text or voice message - ignore
   return NextResponse.json({ ok: true });
 }
