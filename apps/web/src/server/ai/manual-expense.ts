@@ -115,9 +115,25 @@ export async function generateManualPreview(
       messages: [
         {
           role: "system",
-          content: `You extract structured expense data from Romanian messages. Respond ONLY with JSON that respects this schema: ${JSON.stringify(
-            manualSchema.schema
-          )}. Match inferred categories to this list: ${categoryContext}. Dates must be ISO (YYYY-MM-DD).`,
+          content: `You are an AI that extracts structured expense data from Romanian messages.
+
+IMPORTANT INSTRUCTIONS FOR ROMANIAN TEXT:
+- The "vendor" field should be the ITEM PURCHASED or STORE NAME, NOT the verb phrase
+- Example: "Am cumpărat pâine 15 lei" → vendor should be "pâine" (bread), NOT "Am"
+- Example: "Am fost la Linella 50 lei" → vendor should be "Linella" (store name)
+- Example: "Cafea 25 lei" → vendor should be "Cafea" (coffee)
+- Ignore Romanian verbs like: "Am cumpărat", "Am fost", "Plătit", etc.
+
+CATEGORY MATCHING:
+- Match the expense to one of these categories: ${categoryContext}
+- If the item is food/groceries, use "Groceries"
+- If the item is transportation (taxi, bus, benzină), use "Transport"
+- If the item is restaurant/coffee, use "Restaurant"
+- If uncertain, leave category empty
+
+OUTPUT FORMAT:
+Respond ONLY with JSON that follows this schema: ${JSON.stringify(manualSchema.schema)}
+Dates must be in ISO format (YYYY-MM-DD). If no date is mentioned, use today's date.`,
         },
         { role: "user", content: description },
       ],

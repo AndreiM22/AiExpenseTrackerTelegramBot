@@ -30,14 +30,13 @@ export async function transcribeVoice(filePath: string): Promise<VoiceTranscript
     const transcription = await groqClient.audio.transcriptions.create({
       file: audioFile,
       model: DEFAULT_WHISPER_MODEL,
-      response_format: "verbose_json", // Get language and duration info
       language: "ro", // Romanian language hint (optional, Whisper auto-detects)
     });
 
     return {
       text: transcription.text.trim(),
-      language: transcription.language,
-      duration: transcription.duration,
+      language: "ro", // Assume Romanian since we set it as hint
+      duration: 0, // Duration not available in standard response
     };
   } catch (error) {
     console.error("Groq Whisper transcription failed:", error);
