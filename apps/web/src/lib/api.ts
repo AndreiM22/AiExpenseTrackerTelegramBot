@@ -4,19 +4,16 @@ const trimTrailingSlash = (value: string) =>
 const stripApiSuffix = (value: string) =>
   value.toLowerCase().endsWith("/api") ? value.slice(0, -4) : value;
 
-const defaultAppUrl =
-  process.env.NEXT_PUBLIC_APP_URL?.trim() || "http://localhost:3000";
-const defaultApiBase = trimTrailingSlash(defaultAppUrl);
-
 const normalizeBase = (value?: string | null, fallback?: string) => {
-  const source = value && value.trim().length > 0 ? value.trim() : fallback ?? defaultApiBase;
+  const source = value && value.trim().length > 0 ? value.trim() : fallback ?? "";
   return trimTrailingSlash(stripApiSuffix(source));
 };
 
-export const PUBLIC_API_BASE = normalizeBase(
-  process.env.NEXT_PUBLIC_API_URL,
-  defaultApiBase
-);
+// Use relative paths for client-side (browser will use current domain)
+// Use environment variable only on server-side
+export const PUBLIC_API_BASE = typeof window === "undefined"
+  ? normalizeBase(process.env.NEXT_PUBLIC_API_URL || process.env.API_BASE_URL)
+  : "";
 
 export const SERVER_API_BASE = normalizeBase(
   process.env.API_BASE_URL,

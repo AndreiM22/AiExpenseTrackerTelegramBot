@@ -15,16 +15,15 @@ const trimTrailingSlash = (value: string) =>
 const stripApiSuffix = (value: string) =>
   value.toLowerCase().endsWith("/api") ? value.slice(0, -4) : value;
 
-const defaultAppUrl =
-  process.env.NEXT_PUBLIC_APP_URL?.trim() || "http://localhost:3000";
-
-const API_BASE = trimTrailingSlash(
-  stripApiSuffix(
-    process.env.API_BASE_URL ||
-      process.env.NEXT_PUBLIC_API_URL ||
-      defaultAppUrl
-  )
-);
+// Use relative paths for client-side (browser will use current domain)
+// Use environment variable only on server-side
+const API_BASE = typeof window === "undefined"
+  ? trimTrailingSlash(
+      stripApiSuffix(
+        process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || ""
+      )
+    )
+  : "";
 
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T | null> {
   try {
