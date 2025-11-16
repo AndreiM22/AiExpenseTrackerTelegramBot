@@ -40,7 +40,20 @@
       "Bash(/usr/local/bin/docker compose -f docker-compose.prod.yml logs web --tail=30)",
       "Bash(/usr/local/bin/docker compose -f docker-compose.prod.yml down)",
       "Bash(export SSHPASS='79aAMJvfMaeV')",
-      "Bash(sshpass -e ssh:*)"
+      "Bash(sshpass -e ssh:*)",
+      "Bash(./scripts/deploy-quick.sh:*)",
+      "Bash(export TELEGRAM_BOT_TOKEN:*)",
+      "Bash(sqlite3:*)",
+      "Bash(sshpass -e scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null )",
+      "Bash(/Users/andreim./Desktop/TelegramBotAI/apps/web/src/server/mock-db.ts )",
+      "Bash(root@65.21.110.105:/opt/expensebot/apps/web/src/server/mock-db.ts)",
+      "Bash(/Users/andreim./Desktop/TelegramBotAI/apps/web/src/server/ai/voice-expense.ts )",
+      "Bash(root@65.21.110.105:/opt/expensebot/apps/web/src/server/ai/voice-expense.ts)",
+      "Bash(/Users/andreim./Desktop/TelegramBotAI/apps/web/src/app/api/telegram/webhook/route.ts )",
+      "Bash(root@65.21.110.105:/opt/expensebot/apps/web/src/app/api/telegram/webhook/route.ts)",
+      "Bash(npm run dev:*)",
+      "Bash(ngrok http:*)",
+      "Bash(sshpass -e scp:*)"
     ],
     "deny": [],
     "ask": []
