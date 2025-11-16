@@ -1,18 +1,14 @@
 import { DashboardShell } from "@/components/layout/DashboardShell";
 import { CategoriesTable } from "@/components/categories/CategoriesTable";
-import { serverFetch } from "@/lib/api";
-import type {
-  CategoryResponse,
-  CategoryBreakdown,
-} from "@/lib/types";
+import { listCategories, computeCategoryBreakdown } from "@/server/mock-db";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 async function getCategoriesData() {
   const [categories, stats] = await Promise.all([
-    serverFetch<CategoryResponse[]>("/api/v1/categories"),
-    serverFetch<CategoryBreakdown>("/api/v1/statistics/by_category?period=all"),
+    listCategories(),
+    computeCategoryBreakdown({}), // No date filter = all time
   ]);
 
   const statsMap = new Map<
