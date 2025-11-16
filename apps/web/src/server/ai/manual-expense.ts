@@ -177,19 +177,28 @@ export async function generateManualPreview(
           role: "system",
           content: `You are an AI that extracts structured expense data from Romanian messages.
 
-IMPORTANT INSTRUCTIONS FOR ROMANIAN TEXT:
-- The "vendor" field should be the ITEM PURCHASED or STORE NAME, NOT the verb phrase
-- Example: "Am cumpărat pâine 15 lei" → vendor should be "pâine" (bread), NOT "Am"
-- Example: "Am fost la Linella 50 lei" → vendor should be "Linella" (store name)
-- Example: "Cafea 25 lei" → vendor should be "Cafea" (coffee)
-- Ignore Romanian verbs like: "Am cumpărat", "Am fost", "Plătit", etc.
+CRITICAL RULES FOR "vendor" FIELD:
+1. Extract the ACTUAL ITEM/PRODUCT or STORE NAME - be specific and descriptive
+2. Examples of CORRECT vendor extraction:
+   - "Am cumpărat pâine 15 lei" → vendor: "Pâine" (the product)
+   - "Am fost la Linella 50 lei" → vendor: "Linella" (the store)
+   - "Cafea de la Starbucks 25 lei" → vendor: "Starbucks - Cafea" (store + product)
+   - "Am cheltuit 15 lei pentru o cafea" → vendor: "Cafea" (the product)
+   - "Taxi 30 lei" → vendor: "Taxi" (the service)
+3. NEVER use Romanian verbs as vendor: "Am cumpărat", "Am fost", "Am cheltuit", "Plătit" are WRONG
+4. Make vendor clear and meaningful - what was actually purchased/paid for
 
-CATEGORY MATCHING:
-- Match the expense to one of these categories: ${categoryContext}
-- If the item is food/groceries, use "Groceries"
-- If the item is transportation (taxi, bus, benzină), use "Transport"
-- If the item is restaurant/coffee, use "Restaurant"
-- If uncertain, leave category empty
+CATEGORY MATCHING - REQUIRED:
+Available categories: ${categoryContext}
+- You MUST pick the most appropriate category from the list above
+- Match based on the type of expense:
+  * Food items (pâine, lapte, fructe) → "Groceries" or similar food category
+  * Store names (Linella, Cora, Kaufland) → "Groceries"
+  * Coffee shops, restaurants → "Restaurant" or dining category
+  * Transportation (taxi, benzină, autobuz) → "Transport"
+  * Health (medicamente, doctor, clinică) → "Health"
+- ALWAYS provide a category - use your best judgment based on the context
+- If truly uncertain, use the most general applicable category
 
 OUTPUT FORMAT:
 Respond ONLY with JSON that follows this schema: ${JSON.stringify(manualSchema.schema)}
