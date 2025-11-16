@@ -10,6 +10,7 @@ import {
   listCategories,
   rejectPendingExpense,
 } from "@/server/mock-db";
+import { logServerError } from "@/server/logging";
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET;
@@ -156,6 +157,10 @@ export async function POST(request: Request) {
         });
       }
     } catch (error) {
+      await logServerError("telegram_callback_error", error, {
+        callback_data: callbackData,
+        chat_id: callbackChatId,
+      });
       const detail = error instanceof Error ? error.message : "Eroare la procesare";
       console.error("Callback query error:", error);
       await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerCallbackQuery`, {
@@ -226,6 +231,7 @@ ${preview.data.notes ? `📄 Descriere: ${preview.data.notes}` : ""}
         }),
       });
     } catch (error) {
+      await logServerError("telegram_text_error", error, { chat_id: chatId, text: textMessage });
       const messageText = error instanceof Error ? error.message : "Eroare neașteptată";
       await sendTelegramMessage(chatId, `⚠️ ${messageText}`);
     }
@@ -325,6 +331,7 @@ _${correctedText}_
         }),
       });
     } catch (error) {
+      await logServerError("telegram_voice_error", error, { chat_id: chatId, voice_id: voiceMessage.file_id });
       const messageText = error instanceof Error ? error.message : "Eroare neașteptată";
       await sendTelegramMessage(chatId, `⚠️ ${messageText}`);
     } finally {

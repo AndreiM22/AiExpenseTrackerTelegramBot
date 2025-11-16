@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { approvePendingExpense } from "@/server/mock-db";
+import { logServerError } from "@/server/logging";
 
 export async function POST(request: Request) {
   try {
@@ -20,6 +21,10 @@ export async function POST(request: Request) {
     });
     return NextResponse.json(expense, { status: 201 });
   } catch (error) {
+    await logServerError("manual_confirm_failed", error, {
+      endpoint: "manual/confirm",
+      pending_id: String(payload.pending_id ?? ""),
+    });
     const detail = error instanceof Error ? error.message : "Nu am putut salva cheltuiala.";
     return NextResponse.json({ detail }, { status: 400 });
   }

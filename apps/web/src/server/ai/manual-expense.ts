@@ -49,6 +49,56 @@ const manualSchema = {
   strict: false,
 } as const;
 
+const BANNED_VENDOR_WORDS = new Set(["am", "în", "pe", "la"]);
+const CURRENCY_PATTERN = /\b(mdl|lei|ron|eur|usd|gbp)\b/i;
+const VENDOR_PATTERNS = [
+  /cump(?:ă|a)rat\s+(?:pe|la|pentru|de la)?\s*([^0-9\n]+)/i,
+  /luat\s+(?:pe|la|pentru|de la)?\s*([^0-9\n]+)/i,
+  /pl(?:ă|a)tit\s+(?:pe|la|pentru|de la)?\s*([^0-9\n]+)/i,
+  /achitat\s+(?:pe|la|pentru|de la)?\s*([^0-9\n]+)/i,
+  /cheltuit\s+(?:pe|la|pentru|de la)?\s*([^0-9\n]+)/i,
+  /fost\s+la\s+([^0-9\n]+)/i,
+  /de la\s+([^0-9\n]+)/i,
+];
+
+const formatVendorCandidate = (value: string) => {
+  if (!value) return "";
+  let candidate = value.replace(/[,:;#]/g, " ").replace(/\s+/g, " ").trim();
+  if (!candidate) return "";
+  candidate = candidate.replace(CURRENCY_PATTERN, "").trim();
+  candidate = candidate.replace(/\d+/g, "").trim();
+  candidate = candidate.replace(/\b(cu|pentru|pe|la|de la)\s*$/i, "").trim();
+  candidate = candidate.replace(/^(o|un|niște|niste)\s+/i, "").trim();
+  if (!candidate) return "";
+  const limited = candidate.split(/\s+/).slice(0, 3).join(" ");
+  return limited.charAt(0).toUpperCase() + limited.slice(1);
+};
+
+const detectVendorFromText = (text: string) => {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  for (const pattern of VENDOR_PATTERNS) {
+    const match = normalized.match(pattern);
+    if (match?.[1]) {
+      const candidate = formatVendorCandidate(match[1]);
+      if (candidate && !BANNED_VENDOR_WORDS.has(candidate.toLowerCase())) {
+        return candidate;
+      }
+    }
+  }
+  const amountMatch = normalized.match(/(\d+[.,]?\d*)\s*(mdl|lei|ron|eur|usd|gbp)?/i);
+  if (amountMatch?.index) {
+    const before = normalized.slice(0, amountMatch.index).trim();
+    const tokens = before.split(/\s+/);
+    if (tokens.length) {
+      const candidate = formatVendorCandidate(tokens.slice(-3).join(" "));
+      if (candidate && !BANNED_VENDOR_WORDS.has(candidate.toLowerCase())) {
+        return candidate;
+      }
+    }
+  }
+  return "";
+};
+
 const fallbackParse = (description: string): ManualPreviewData => {
   const normalized = description.trim();
   const amountMatch = normalized.match(/(\d+[.,]\d+|\d+)/);
@@ -57,11 +107,13 @@ const fallbackParse = (description: string): ManualPreviewData => {
     normalized.match(/(?:de la|la)\s+([A-ZĂÂÎȘȚ][\w&-]+)/i) ||
     normalized.match(/([A-ZĂÂÎȘȚ][\w&-]+)/);
   const vendorRaw = vendorMatch ? vendorMatch[1] || vendorMatch[0] : null;
-  const banned = ["Am", "În", "Pe", "La"];
-  const vendor =
-    vendorRaw && !banned.includes(vendorRaw)
-      ? vendorRaw
-      : "Cheltuială manuală";
+  const vendorFromHeuristics = detectVendorFromText(normalized);
+  const vendorCandidate =
+    vendorFromHeuristics ||
+    (vendorRaw && !BANNED_VENDOR_WORDS.has(vendorRaw.toLowerCase())
+      ? formatVendorCandidate(vendorRaw)
+      : "");
+  const vendor = vendorCandidate || "Cheltuială manuală";
   const currency = normalized.toLowerCase().includes("eur")
     ? "EUR"
     : normalized.toLowerCase().includes("usd")
@@ -70,6 +122,7 @@ const fallbackParse = (description: string): ManualPreviewData => {
     ? "RON"
     : "MDL";
   const today = new Date().toISOString().slice(0, 10);
+  const resolvedItemName = vendor !== "Cheltuială manuală" ? vendor : "Cheltuială";
   return {
     amount,
     currency,
@@ -79,8 +132,8 @@ const fallbackParse = (description: string): ManualPreviewData => {
     notes: normalized,
     items: amount
       ? [
-        {
-          name: vendor === "Cheltuială manuală" ? "Cheltuială" : vendor,
+          {
+            name: resolvedItemName,
             qty: 1,
             price: Number(amount.toFixed(2)),
             total: Number(amount.toFixed(2)),

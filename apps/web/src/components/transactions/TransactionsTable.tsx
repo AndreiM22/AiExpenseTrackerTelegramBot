@@ -115,7 +115,7 @@ type FilterState = {
   maxAmount: string;
 };
 
-type StatusState = { type: "idle" | "success" | "error"; message?: string };
+type StatusState = { type: "idle" | "success" | "error" | "info"; message?: string };
 
 const sortExpenses = (list: ExpenseResponse[]) =>
   [...list].sort(
@@ -532,7 +532,9 @@ export function TransactionsTable({ expenses, categories }: Props) {
               className={`text-sm ${
                 status.type === "success"
                   ? "text-emerald-300"
-                  : "text-rose-300"
+                  : status.type === "error"
+                  ? "text-rose-300"
+                  : "text-sky-300"
               }`}
             >
               {status.message}
@@ -846,6 +848,13 @@ function AddTransactionDialog({
     resetState();
     setOpen(false);
   };
+  const cancelDialog = () => {
+    closeDialog();
+    onStatus({
+      type: "info",
+      message: "Previzualizarea a fost anulată.",
+    });
+  };
 
   const requestPreview = async () => {
     if (textValue.trim().length < 5) {
@@ -887,6 +896,10 @@ function AddTransactionDialog({
         )?.id || "";
       setSelectedCategoryId(suggestedCategory);
       setStep("preview");
+      onStatus({
+        type: "info",
+        message: "Previzualizare generată. Verifică și confirmă salvarea.",
+      });
     } catch (err) {
       setError(
         err instanceof Error
@@ -936,6 +949,10 @@ function AddTransactionDialog({
       };
 
       onCreated(normalized);
+      onStatus({
+        type: "success",
+        message: "Cheltuiala a fost salvată în baza de date.",
+      });
       closeDialog();
     } catch (err) {
       const message =
@@ -972,7 +989,7 @@ function AddTransactionDialog({
                 </h2>
               </div>
               <button
-                onClick={closeDialog}
+                onClick={cancelDialog}
                 className="rounded-full border border-white/10 p-2 text-white hover:border-white/40"
                 title="Închide"
                 disabled={loading}
@@ -995,7 +1012,7 @@ function AddTransactionDialog({
                 )}
                 <div className="flex justify-end gap-3">
                   <button
-                    onClick={closeDialog}
+                    onClick={cancelDialog}
                     className="rounded-2xl border border-white/10 px-4 py-2 text-sm text-white hover:border-white/40"
                     disabled={loading}
                   >
@@ -1097,6 +1114,10 @@ function AddTransactionDialog({
                       void discardPending();
                       setPreview(null);
                       setStep("input");
+                      onStatus({
+                        type: "info",
+                        message: "Rescrie textul și generează o nouă previzualizare.",
+                      });
                     }}
                     className="rounded-2xl border border-white/10 px-4 py-2 text-sm text-white hover:border-white/40"
                     disabled={loading}

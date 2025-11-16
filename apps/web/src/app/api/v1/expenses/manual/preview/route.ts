@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { generateManualPreview } from "@/server/ai/manual-expense";
 import { createPendingExpense, listCategories } from "@/server/mock-db";
+import { logServerError } from "@/server/logging";
 
 export async function POST(request: Request) {
   try {
@@ -33,6 +34,7 @@ export async function POST(request: Request) {
       raw: preview.raw,
     });
   } catch (error) {
+    await logServerError("manual_preview_failed", error, { endpoint: "manual/preview" });
     const detail = error instanceof Error ? error.message : "Nu am putut genera previzualizarea.";
     return NextResponse.json({ detail }, { status: 400 });
   }
