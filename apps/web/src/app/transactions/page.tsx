@@ -6,6 +6,7 @@ import type {
   ExpenseListResponse,
   ExpenseResponse,
 } from "@/lib/types";
+import { listCategories } from "@/server/mock-db";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -18,7 +19,7 @@ async function getTransactionsData(): Promise<{
     serverFetch<ExpenseListResponse>(
       "/api/v1/expenses?limit=200&sort_by=purchase_date&order=desc"
     ),
-    serverFetch<CategoryResponse[]>("/api/v1/categories"),
+    listCategories(),
   ]);
 
   return {
