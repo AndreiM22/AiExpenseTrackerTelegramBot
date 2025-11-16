@@ -22,7 +22,18 @@ export function middleware(request: NextRequest) {
     request.cookies.get("next-auth.session-token") ||
     request.cookies.get("__Secure-next-auth.session-token");
 
-  // Redirect to login if not authenticated
+  // For API routes, return 401 instead of redirecting
+  if (pathname.startsWith("/api/")) {
+    if (!sessionToken) {
+      return NextResponse.json(
+        { error: "Unauthorized - Please login first" },
+        { status: 401 }
+      );
+    }
+    return NextResponse.next();
+  }
+
+  // Redirect to login if not authenticated (for page routes)
   if (!sessionToken) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
