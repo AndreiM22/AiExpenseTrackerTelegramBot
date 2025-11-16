@@ -1,12 +1,10 @@
 import { DashboardShell } from "@/components/layout/DashboardShell";
 import { TransactionsTable } from "@/components/transactions/TransactionsTable";
-import { serverFetch } from "@/lib/api";
 import type {
   CategoryResponse,
-  ExpenseListResponse,
   ExpenseResponse,
 } from "@/lib/types";
-import { listCategories } from "@/server/mock-db";
+import { listCategories, listExpenseWithFilters } from "@/server/mock-db";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -15,15 +13,17 @@ async function getTransactionsData(): Promise<{
   expenses: ExpenseResponse[];
   categories: CategoryResponse[];
 }> {
-  const [expenses, categories] = await Promise.all([
-    serverFetch<ExpenseListResponse>(
-      "/api/v1/expenses?limit=200&sort_by=purchase_date&order=desc"
-    ),
+  const [expensesData, categories] = await Promise.all([
+    listExpenseWithFilters({
+      limit: 200,
+      sortBy: "purchase_date",
+      order: "desc",
+    }),
     listCategories(),
   ]);
 
   return {
-    expenses: expenses?.expenses ?? [],
+    expenses: expensesData.expenses ?? [],
     categories: categories ?? [],
   };
 }
