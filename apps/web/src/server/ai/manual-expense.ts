@@ -2,11 +2,14 @@ import Groq from "groq-sdk";
 import { ManualPreviewData } from "./types";
 
 const DEFAULT_MODEL = process.env.GROQ_MANUAL_MODEL || "llama-3.3-70b-versatile";
-const HAS_GROQ_KEY = Boolean(process.env.GROQ_API_KEY);
 
-const groqClient = HAS_GROQ_KEY
-  ? new Groq({ apiKey: process.env.GROQ_API_KEY })
-  : null;
+// Lazy-load Groq client to ensure environment variables are available at runtime
+function getGroqClient() {
+  if (!process.env.GROQ_API_KEY) {
+    return null;
+  }
+  return new Groq({ apiKey: process.env.GROQ_API_KEY });
+}
 
 const FALLBACK_CATEGORIES = ["Groceries", "Transport", "Restaurant", "Health", "Entertainment"];
 
@@ -159,6 +162,8 @@ export async function generateManualPreview(
   description: string,
   options?: ManualPreviewOptions
 ): Promise<{ data: ManualPreviewData; source: "groq" | "heuristic"; raw?: unknown }> {
+  const groqClient = getGroqClient();
+
   if (!groqClient) {
     console.log("[manual-expense] No Groq client - using fallback");
     return { data: fallbackParse(description), source: "heuristic" };
