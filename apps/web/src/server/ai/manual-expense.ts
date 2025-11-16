@@ -160,6 +160,7 @@ export async function generateManualPreview(
   options?: ManualPreviewOptions
 ): Promise<{ data: ManualPreviewData; source: "groq" | "heuristic"; raw?: unknown }> {
   if (!groqClient) {
+    console.log("[manual-expense] No Groq client - using fallback");
     return { data: fallbackParse(description), source: "heuristic" };
   }
 
@@ -167,6 +168,8 @@ export async function generateManualPreview(
   const categoryContext = categories?.length
     ? categories.join(", ")
     : FALLBACK_CATEGORIES.join(", ");
+
+  console.log("[manual-expense] Using Groq AI with categories:", categoryContext);
 
   try {
     const completion = await groqClient.chat.completions.create({
@@ -209,13 +212,16 @@ Dates must be in ISO format (YYYY-MM-DD). If no date is mentioned, use today's d
     });
 
     const text = completion.choices?.[0]?.message?.content;
+    console.log("[manual-expense] Groq response:", text);
     const parsed = extractJson(text);
     const data: ManualPreviewData | undefined = parsed?.data ?? parsed;
     if (data) {
+      console.log("[manual-expense] Parsed data:", JSON.stringify(data));
       return { data, source: "groq", raw: parsed };
     }
+    console.log("[manual-expense] No data in Groq response, using fallback");
   } catch (error) {
-    console.warn("Groq manual parser fallback:", error);
+    console.warn("[manual-expense] Groq error, using fallback:", error);
   }
 
   return { data: fallbackParse(description), source: "heuristic" };
