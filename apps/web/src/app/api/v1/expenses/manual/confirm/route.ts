@@ -3,8 +3,9 @@ import { approvePendingExpense } from "@/server/mock-db";
 import { logServerError } from "@/server/logging";
 
 export async function POST(request: Request) {
+  let payload: Record<string, unknown> = {};
   try {
-    const payload = await request.json().catch(() => ({}));
+    payload = await request.json().catch(() => ({}));
     const pendingId = String(payload.pending_id ?? "").trim();
     if (!pendingId) {
       return NextResponse.json({ detail: "Previzualizarea nu mai este disponibilă." }, { status: 400 });
