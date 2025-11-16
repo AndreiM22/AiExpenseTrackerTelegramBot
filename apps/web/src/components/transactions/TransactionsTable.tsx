@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { CategoryResponse, ExpenseResponse } from "@/lib/types";
 import { formatCurrency, formatFullDate } from "@/lib/utils";
 import { PUBLIC_API_BASE } from "@/lib/api";
@@ -802,18 +802,40 @@ function AddTransactionDialog({
   const [step, setStep] = useState<"input" | "preview">("input");
   const [textValue, setTextValue] = useState("");
   const [preview, setPreview] = useState<ExpensePreviewData | null>(null);
+  const [pendingId, setPendingId] = useState<string | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const discardPending = useCallback(async () => {
+    if (!pendingId) {
+      return;
+    }
+    try {
+      await fetch(`${PUBLIC_API_BASE}/api/v1/expenses/manual/reject`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({ pending_id: pendingId }),
+      });
+    } catch {
+      // ignorăm erorile de cleanup
+    } finally {
+      setPendingId(null);
+    }
+  }, [pendingId]);
 
-  const resetState = () => {
+  const resetState = useCallback(() => {
+    void discardPending();
     setStep("input");
     setTextValue("");
     setPreview(null);
+    setPendingId(null);
     setSelectedCategoryId("");
     setError(null);
     setLoading(false);
-  };
+  }, [discardPending]);
 
   const openDialog = () => {
     resetState();
@@ -833,6 +855,7 @@ function AddTransactionDialog({
     setLoading(true);
     setError(null);
     try {
+      await discardPending();
       const response = await fetch(
         `${PUBLIC_API_BASE}/api/v1/expenses/manual/preview`,
         {
@@ -849,8 +872,12 @@ function AddTransactionDialog({
       if (!response.ok) {
         throw new Error(result?.detail || "Nu am putut genera previzualizarea.");
       }
+      if (!result?.pending_id) {
+        throw new Error("Previzualizarea nu a putut fi salvată pentru aprobare.");
+      }
 
       const data = (result?.data || {}) as ExpensePreviewData;
+      setPendingId(result.pending_id);
       setPreview(data);
       const suggestedCategory =
         categories.find(
@@ -872,23 +899,13 @@ function AddTransactionDialog({
   };
 
   const confirmExpense = async () => {
-    if (!preview) return;
+    if (!preview || !pendingId) {
+      setError("Previzualizarea a expirat. Genereaz-o din nou.");
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const categoryName =
-        (selectedCategoryId &&
-          categories.find((cat) => cat.id === selectedCategoryId)?.name) ||
-        preview.category;
-
-      const payload = {
-        source: "manual",
-        parsed_data: {
-          ...preview,
-          category: categoryName,
-        },
-      };
-
       const response = await fetch(
         `${PUBLIC_API_BASE}/api/v1/expenses/manual/confirm`,
         {
@@ -897,7 +914,10 @@ function AddTransactionDialog({
             "Content-Type": "application/json",
             Accept: "application/json",
           },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({
+            pending_id: pendingId,
+            category_id: selectedCategoryId || null,
+          }),
         }
       );
 
@@ -908,6 +928,7 @@ function AddTransactionDialog({
             "Nu am putut salva cheltuiala."
         );
       }
+      setPendingId(null);
 
       const normalized = {
         ...detail,
@@ -1072,7 +1093,11 @@ function AddTransactionDialog({
 
                 <div className="flex flex-wrap justify-end gap-3">
                   <button
-                    onClick={() => setStep("input")}
+                    onClick={() => {
+                      void discardPending();
+                      setPreview(null);
+                      setStep("input");
+                    }}
                     className="rounded-2xl border border-white/10 px-4 py-2 text-sm text-white hover:border-white/40"
                     disabled={loading}
                   >

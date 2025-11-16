@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  approvePendingExpense,
   computeCategoryBreakdown,
   confirmManualExpense,
   createCategory,
+  createPendingExpense,
   deleteCategory,
   listCategories,
   listExpenseWithFilters,
@@ -48,6 +50,22 @@ describe("data service (Prisma)", () => {
       categoryIds: expense.category_id ? [expense.category_id] : undefined,
     });
     expect(filtered.expenses.some((row) => row.id === expense.id)).toBe(true);
+  });
+
+  it("creează o cheltuială pending și o aprobă", async () => {
+    const pending = await createPendingExpense({
+      raw_text: "Am cumpărat cafea cu 50 MDL.",
+      parsed_data: {
+        amount: 50,
+        vendor: "Cafea",
+        currency: "MDL",
+      },
+    });
+
+    expect(pending.id).toBeTruthy();
+
+    const approved = await approvePendingExpense({ pendingId: pending.id });
+    expect(approved.vendor).toBe("Cafea");
   });
 
   it("generează previzualizări AI pe baza textului introdus", async () => {

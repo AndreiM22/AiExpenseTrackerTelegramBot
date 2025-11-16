@@ -1,5 +1,6 @@
 import "server-only";
 
+import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 import type {
   CategoryBreakdown,
@@ -46,6 +47,14 @@ const KEYWORD_CATEGORY_MAP: Array<{ keyword: RegExp; suggestion: CategorySuggest
   { keyword: /(soft|subscription|saas|licence|abonament)/i, suggestion: { name: "Software", color: "#a855f7", icon: "💻" } },
 ];
 
+const PENDING_STATUS = {
+  PENDING: "PENDING",
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
+} as const;
+
+type PendingExpenseStatus = (typeof PENDING_STATUS)[keyof typeof PENDING_STATUS];
+
 let dbInitialized = false;
 let seeded = false;
 
@@ -78,6 +87,22 @@ async function ensureDatabaseSetup() {
     );
   `);
   await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Expense_category_idx" ON "Expense"("categoryId");`);
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "PendingExpense" (
+      "id" TEXT PRIMARY KEY,
+      "rawText" TEXT NOT NULL,
+      "correctedText" TEXT,
+      "source" TEXT NOT NULL DEFAULT 'manual',
+      "status" TEXT NOT NULL DEFAULT 'PENDING',
+      "parsedData" TEXT NOT NULL,
+      "metadata" TEXT,
+      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "approvedAt" DATETIME,
+      "rejectedAt" DATETIME,
+      "approvedExpenseId" TEXT
+    );
+  `);
   dbInitialized = true;
 }
 
@@ -122,6 +147,20 @@ const startOfWeek = (value: string) => {
 };
 
 type ExpenseWithCategory = Prisma.ExpenseGetPayload<{ include: { category: true } }>;
+type PendingExpenseRow = {
+  id: string;
+  rawText: string;
+  correctedText: string | null;
+  source: string;
+  status: PendingExpenseStatus;
+  parsedData: string | null;
+  metadata: string | null;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+  approvedAt: Date | string | null;
+  rejectedAt: Date | string | null;
+  approvedExpenseId: string | null;
+};
 
 const toExpenseResponse = (expense?: ExpenseWithCategory | null) => {
   if (!expense) return null;
@@ -152,6 +191,15 @@ const toCategoryResponse = (category: { id: string; name: string; color: string 
   icon: category.icon,
   is_default: category.isDefault,
 });
+
+const parseJsonColumn = <T>(value: string | null): T | null => {
+  if (!value) return null;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return null;
+  }
+};
 
 async function findCategoryByNameInsensitive(name: string) {
   const lower = name.trim().toLowerCase();
@@ -358,7 +406,100 @@ export async function deleteExpenseRecord(id: string) {
   await prisma.expense.delete({ where: { id } });
 }
 
-export async function confirmManualExpense(payload: { source?: string; parsed_data?: ManualPreviewData }) {
+type PendingExpenseInput = {
+  raw_text: string;
+  parsed_data: ManualPreviewData;
+  source?: string;
+  corrected_text?: string;
+  metadata?: Record<string, unknown> | null;
+};
+
+async function fetchPendingExpense(id: string): Promise<PendingExpenseRow | null> {
+  const rows = await prisma.$queryRaw<PendingExpenseRow[]>`SELECT * FROM "PendingExpense" WHERE "id" = ${id} LIMIT 1`;
+  return rows[0] ?? null;
+}
+
+export async function createPendingExpense(payload: PendingExpenseInput) {
+  await ensureSeedData();
+  const rawText = payload.raw_text?.trim();
+  if (!rawText) {
+    throw new Error("Textul introdus este gol.");
+  }
+  if (!payload.parsed_data) {
+    throw new Error("Nu am putut interpreta textul.");
+  }
+
+  const id = randomUUID();
+  const corrected = payload.corrected_text?.trim() || null;
+  const serializedData = JSON.stringify(payload.parsed_data);
+  const serializedMetadata = payload.metadata ? JSON.stringify(payload.metadata) : null;
+  await prisma.$executeRaw`
+    INSERT INTO "PendingExpense" (
+      "id", "rawText", "correctedText", "source", "status", "parsedData", "metadata", "createdAt", "updatedAt"
+    ) VALUES (
+      ${id}, ${rawText}, ${corrected}, ${payload.source ?? "manual"}, ${PENDING_STATUS.PENDING},
+      ${serializedData}, ${serializedMetadata}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+    );
+  `;
+
+  return {
+    id,
+    source: payload.source ?? "manual",
+    raw_text: rawText,
+    parsed_data: payload.parsed_data,
+  };
+}
+
+export async function rejectPendingExpense(id: string) {
+  await ensureSeedData();
+  const existing = await fetchPendingExpense(id);
+  if (!existing || existing.status !== PENDING_STATUS.PENDING) {
+    return;
+  }
+  await prisma.$executeRaw`
+    UPDATE "PendingExpense"
+    SET "status" = ${PENDING_STATUS.REJECTED},
+        "rejectedAt" = CURRENT_TIMESTAMP,
+        "updatedAt" = CURRENT_TIMESTAMP
+    WHERE "id" = ${id};
+  `;
+}
+
+export async function approvePendingExpense(payload: { pendingId: string; overrides?: { category_id?: string | null } }) {
+  await ensureSeedData();
+  if (!payload.pendingId) {
+    throw new Error("Identificatorul previzualizării lipsește.");
+  }
+  const record = await fetchPendingExpense(payload.pendingId);
+  if (!record) {
+    throw new Error("Previzualizarea nu mai este disponibilă.");
+  }
+  if (record.status !== PENDING_STATUS.PENDING) {
+    throw new Error("Previzualizarea a fost deja procesată.");
+  }
+  const parsedData = parseJsonColumn<ManualPreviewData>(record.parsedData);
+  if (!parsedData) {
+    throw new Error("Datele asociate previzualizării nu sunt valide.");
+  }
+
+  return confirmManualExpense({
+    source: record.source,
+    parsed_data: parsedData,
+    overrides: payload.overrides?.category_id !== undefined ? { categoryId: payload.overrides.category_id } : undefined,
+    pendingId: record.id,
+  });
+}
+
+type ManualExpenseOverrides = {
+  categoryId?: string | null;
+};
+
+export async function confirmManualExpense(payload: {
+  source?: string;
+  parsed_data?: ManualPreviewData;
+  overrides?: ManualExpenseOverrides;
+  pendingId?: string;
+}) {
   await ensureSeedData();
   if (!payload?.parsed_data) {
     throw new Error("Lipsește conținutul cheltuielii.");
@@ -371,7 +512,17 @@ export async function confirmManualExpense(payload: { source?: string; parsed_da
   const normalizedCurrency = currency || "MDL";
   const dateKey = purchase_date || new Date().toISOString().slice(0, 10);
   let categoryId: string | null = null;
-  if (category) {
+  if (payload.overrides?.categoryId !== undefined) {
+    if (payload.overrides.categoryId) {
+      const categoryRecord = await prisma.category.findUnique({ where: { id: payload.overrides.categoryId } });
+      if (!categoryRecord) {
+        throw new Error("Categoria selectată nu există.");
+      }
+      categoryId = categoryRecord.id;
+    } else {
+      categoryId = null;
+    }
+  } else if (category) {
     const existing = await findCategoryByNameInsensitive(category);
     if (existing) {
       categoryId = existing.id;
@@ -403,6 +554,16 @@ export async function confirmManualExpense(payload: { source?: string; parsed_da
     },
     include: { category: true },
   });
+  if (payload.pendingId) {
+    await prisma.$executeRaw`
+      UPDATE "PendingExpense"
+      SET "status" = ${PENDING_STATUS.APPROVED},
+          "approvedAt" = CURRENT_TIMESTAMP,
+          "approvedExpenseId" = ${created.id},
+          "updatedAt" = CURRENT_TIMESTAMP
+      WHERE "id" = ${payload.pendingId};
+    `;
+  }
   return toExpenseResponse(created) as ExpenseResponse;
 }
 

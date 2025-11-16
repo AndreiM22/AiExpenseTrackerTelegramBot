@@ -53,8 +53,15 @@ const fallbackParse = (description: string): ManualPreviewData => {
   const normalized = description.trim();
   const amountMatch = normalized.match(/(\d+[.,]\d+|\d+)/);
   const amount = amountMatch ? parseFloat(amountMatch[0].replace(",", ".")) : undefined;
-  const vendorMatch = normalized.match(/([A-ZĂÂÎȘȚ][\w&-]+)/);
-  const vendor = vendorMatch ? vendorMatch[0] : "Cheltuială";
+  const vendorMatch =
+    normalized.match(/(?:de la|la)\s+([A-ZĂÂÎȘȚ][\w&-]+)/i) ||
+    normalized.match(/([A-ZĂÂÎȘȚ][\w&-]+)/);
+  const vendorRaw = vendorMatch ? vendorMatch[1] || vendorMatch[0] : null;
+  const banned = ["Am", "În", "Pe", "La"];
+  const vendor =
+    vendorRaw && !banned.includes(vendorRaw)
+      ? vendorRaw
+      : "Cheltuială manuală";
   const currency = normalized.toLowerCase().includes("eur")
     ? "EUR"
     : normalized.toLowerCase().includes("usd")
@@ -72,8 +79,8 @@ const fallbackParse = (description: string): ManualPreviewData => {
     notes: normalized,
     items: amount
       ? [
-          {
-            name: vendor,
+        {
+          name: vendor === "Cheltuială manuală" ? "Cheltuială" : vendor,
             qty: 1,
             price: Number(amount.toFixed(2)),
             total: Number(amount.toFixed(2)),

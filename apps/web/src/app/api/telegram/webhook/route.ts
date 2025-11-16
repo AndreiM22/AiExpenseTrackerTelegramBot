@@ -4,28 +4,18 @@ import { join } from "path";
 import { tmpdir } from "os";
 import { generateManualPreview } from "@/server/ai/manual-expense";
 import { transcribeVoice } from "@/server/ai/voice-expense";
-import { confirmManualExpense, listCategories } from "@/server/mock-db";
-import type { ManualPreviewData } from "@/server/ai/types";
+import {
+  approvePendingExpense,
+  createPendingExpense,
+  listCategories,
+  rejectPendingExpense,
+} from "@/server/mock-db";
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET;
 const BOT_ENABLED = String(process.env.ENABLE_TELEGRAM_BOT).toLowerCase() === "true";
 
 export const dynamic = "force-dynamic";
-
-// Global storage for pending approvals (in production, use Redis or database)
-declare global {
-  var telegramPreviews: Map<string, {
-    chatId: number;
-    source: string;
-    parsed_data: ManualPreviewData;
-    timestamp: number;
-  }> | undefined;
-}
-
-if (!global.telegramPreviews) {
-  global.telegramPreviews = new Map();
-}
 
 async function sendTelegramMessage(chatId: number, text: string) {
   if (!BOT_TOKEN) return;
@@ -102,20 +92,14 @@ export async function POST(request: Request) {
     }
 
     try {
-      // Parse callback data: "approve_preview_123" or "reject_preview_123"
-      const [action, ...previewIdParts] = callbackData.split("_");
-      const previewId = previewIdParts.join("_");
-
-      const previewData = global.telegramPreviews!.get(previewId);
-
-      if (!previewData) {
-        // Preview expired or not found
+      const [action, pendingId] = callbackData.split(":");
+      if (!pendingId) {
         await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerCallbackQuery`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             callback_query_id: callbackQuery.id,
-            text: "⚠️ Preview expirat. Trimite din nou mesajul.",
+            text: "Previzualizare invalidă.",
             show_alert: true,
           }),
         });
@@ -123,13 +107,8 @@ export async function POST(request: Request) {
       }
 
       if (action === "approve") {
-        // Save expense to database
-        const saved = await confirmManualExpense({
-          source: previewData.source,
-          parsed_data: previewData.parsed_data,
-        });
+        const saved = await approvePendingExpense({ pendingId });
 
-        // Update message to show confirmation
         await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/editMessageText`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -146,7 +125,6 @@ export async function POST(request: Request) {
           }),
         });
 
-        // Answer callback query
         await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerCallbackQuery`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -155,11 +133,8 @@ export async function POST(request: Request) {
             text: "✅ Salvat în baza de date!",
           }),
         });
-
-        // Clean up preview
-        global.telegramPreviews!.delete(previewId);
       } else if (action === "reject") {
-        // Delete/update message to show rejection
+        await rejectPendingExpense(pendingId);
         await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/editMessageText`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -171,7 +146,6 @@ export async function POST(request: Request) {
           }),
         });
 
-        // Answer callback query
         await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerCallbackQuery`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -180,18 +154,16 @@ export async function POST(request: Request) {
             text: "❌ Anulat",
           }),
         });
-
-        // Clean up preview
-        global.telegramPreviews!.delete(previewId);
       }
     } catch (error) {
+      const detail = error instanceof Error ? error.message : "Eroare la procesare";
       console.error("Callback query error:", error);
       await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerCallbackQuery`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           callback_query_id: callbackQuery.id,
-          text: "⚠️ Eroare la procesare",
+          text: `⚠️ ${detail}`,
           show_alert: true,
         }),
       });
@@ -215,8 +187,16 @@ export async function POST(request: Request) {
     try {
       const categories = await listCategories();
       const preview = await generateManualPreview(textMessage, { categories });
+      if (!preview.data) {
+        throw new Error("Nu am putut interpreta mesajul.");
+      }
+      const pending = await createPendingExpense({
+        raw_text: textMessage,
+        source: "telegram",
+        parsed_data: preview.data,
+        metadata: { ai_source: preview.source, raw_response: preview.raw ?? null, chat_id: chatId },
+      });
 
-      // Create preview message with inline keyboard
       const previewText = `📝 *Confirmă cheltuiala:*
 
 📌 Vendor: *${preview.data.vendor || "—"}*
@@ -228,10 +208,6 @@ ${preview.data.notes ? `📄 Descriere: ${preview.data.notes}` : ""}
 ✅ Confirmă pentru a salva în baza de date
 ❌ Anulează pentru a șterge`;
 
-      // Store preview data temporarily (we'll use callback_data to identify it)
-      const previewId = `preview_${Date.now()}`;
-
-      // Send message with inline keyboard
       await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -242,28 +218,13 @@ ${preview.data.notes ? `📄 Descriere: ${preview.data.notes}` : ""}
           reply_markup: {
             inline_keyboard: [
               [
-                { text: "✅ Confirmă", callback_data: `approve_${previewId}` },
-                { text: "❌ Anulează", callback_data: `reject_${previewId}` },
+                { text: "✅ Confirmă", callback_data: `approve:${pending.id}` },
+                { text: "❌ Anulează", callback_data: `reject:${pending.id}` },
               ],
             ],
           },
         }),
       });
-
-      // Store preview data for later approval
-      global.telegramPreviews!.set(previewId, {
-        chatId,
-        source: "telegram",
-        parsed_data: preview.data,
-        timestamp: Date.now(),
-      });
-
-      // Clean up old previews (older than 10 minutes)
-      for (const [id, data] of global.telegramPreviews!.entries()) {
-        if (Date.now() - data.timestamp > 10 * 60 * 1000) {
-          global.telegramPreviews!.delete(id);
-        }
-      }
     } catch (error) {
       const messageText = error instanceof Error ? error.message : "Eroare neașteptată";
       await sendTelegramMessage(chatId, `⚠️ ${messageText}`);
@@ -272,47 +233,104 @@ ${preview.data.notes ? `📄 Descriere: ${preview.data.notes}` : ""}
     return NextResponse.json({ ok: true });
   }
 
-  // Handle voice messages
+  // Handle voice messages - transcribe, correct, and send for approval
   if (voiceMessage) {
     let tempFilePath: string | null = null;
 
     try {
       await sendTelegramMessage(chatId, "🎤 Procesez mesajul vocal...");
 
-      // Download voice file from Telegram
+      // Step 1: Download voice file from Telegram
       tempFilePath = await downloadTelegramFile(voiceMessage.file_id);
 
-      // Transcribe with Groq Whisper
+      // Step 2: Transcribe with Groq Whisper (raw text)
       const transcription = await transcribeVoice(tempFilePath);
 
       if (!transcription.text) {
         throw new Error("Nu am putut transcrie mesajul vocal.");
       }
 
-      // Process transcribed text through Groq AI
-      const categories = await listCategories();
-      const preview = await generateManualPreview(transcription.text, { categories });
-      const saved = await confirmManualExpense({
-        source: "voice",
-        parsed_data: preview.data,
+      // Step 3: Correct grammar with Groq AI
+      const groqClient = new (await import("groq-sdk")).default({
+        apiKey: process.env.GROQ_API_KEY,
       });
 
-      const summary = `✅ *Cheltuială salvată din mesaj vocal*
-Transcris: "${transcription.text}"
-Vendor: *${saved.vendor}*
-Sumă: *${Number(saved.amount ?? 0).toFixed(2)} ${saved.currency ?? "MDL"}*
-Categorie: ${saved.category_name ?? "Fără categorie"}`;
+      const correctionResponse = await groqClient.chat.completions.create({
+        model: "llama-3.3-70b-versatile",
+        temperature: 0.2,
+        messages: [
+          {
+            role: "system",
+            content: `You are a grammar correction assistant for Romanian text transcribed from speech.
+Your task is to:
+1. Correct any spelling or grammar mistakes
+2. Fix punctuation
+3. Return ONLY the corrected text, nothing else
+4. Keep the meaning and intent exactly the same
+5. If the text is already correct, return it as-is`,
+          },
+          {
+            role: "user",
+            content: `Corectează acest text: "${transcription.text}"`,
+          },
+        ],
+      });
 
-      await sendTelegramMessage(chatId, summary);
+      const correctedText = correctionResponse.choices?.[0]?.message?.content?.trim() || transcription.text;
+
+      const categories = await listCategories();
+      const preview = await generateManualPreview(correctedText, { categories });
+      if (!preview.data) {
+        throw new Error("Nu am putut extrage datele din mesajul vocal.");
+      }
+
+      const pending = await createPendingExpense({
+        raw_text: transcription.text,
+        corrected_text: correctedText,
+        source: "voice",
+        parsed_data: preview.data,
+        metadata: {
+          ai_source: preview.source,
+          raw_response: preview.raw ?? null,
+          chat_id: chatId,
+        },
+      });
+
+      const previewText = `🎤 *Text din mesaj vocal:*
+
+_${correctedText}_
+
+📌 Vendor: *${preview.data.vendor || "—"}*
+💰 Sumă: *${preview.data.amount || 0} ${preview.data.currency || "MDL"}*
+📂 Categorie: ${preview.data.category || "Fără categorie"}
+
+✅ Confirmă pentru a salva în baza de date
+❌ Anulează pentru a șterge`;
+
+      await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: previewText,
+          parse_mode: "Markdown",
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: "✅ Confirmă", callback_data: `approve:${pending.id}` },
+                { text: "❌ Anulează", callback_data: `reject:${pending.id}` },
+              ],
+            ],
+          },
+        }),
+      });
     } catch (error) {
       const messageText = error instanceof Error ? error.message : "Eroare neașteptată";
       await sendTelegramMessage(chatId, `⚠️ ${messageText}`);
     } finally {
       // Clean up temp file
       if (tempFilePath) {
-        await unlink(tempFilePath).catch(() => {
-          // Ignore cleanup errors
-        });
+        await unlink(tempFilePath).catch(() => {});
       }
     }
 

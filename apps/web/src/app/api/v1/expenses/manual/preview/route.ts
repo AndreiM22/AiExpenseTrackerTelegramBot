@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { generateManualPreview } from "@/server/ai/manual-expense";
-import { listCategories } from "@/server/mock-db";
+import { createPendingExpense, listCategories } from "@/server/mock-db";
 
 export async function POST(request: Request) {
   try {
@@ -14,7 +14,24 @@ export async function POST(request: Request) {
     }
     const categories = await listCategories();
     const preview = await generateManualPreview(text, { categories });
-    return NextResponse.json(preview);
+    if (!preview?.data) {
+      throw new Error("Nu am putut interpreta textul.");
+    }
+    const pending = await createPendingExpense({
+      raw_text: text,
+      source: typeof payload.source === "string" ? payload.source : "manual",
+      parsed_data: preview.data,
+      metadata: {
+        ai_source: preview.source,
+        raw_response: preview.raw ?? null,
+      },
+    });
+    return NextResponse.json({
+      pending_id: pending.id,
+      data: preview.data,
+      source: preview.source,
+      raw: preview.raw,
+    });
   } catch (error) {
     const detail = error instanceof Error ? error.message : "Nu am putut genera previzualizarea.";
     return NextResponse.json({ detail }, { status: 400 });

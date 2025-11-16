@@ -31,3 +31,24 @@ model Expense {
   category        Category? @relation(fields: [categoryId], references: [id])
   metadata        Json?
 }
+
+model PendingExpense {
+  id                String                  @id @default(cuid())
+  rawText           String
+  correctedText     String?
+  source            String                  @default("manual")
+  status            PendingExpenseStatus    @default(PENDING)
+  parsedData        Json
+  metadata          Json?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  approvedAt        DateTime?
+  rejectedAt        DateTime?
+  approvedExpenseId String?
+}
+
+enum PendingExpenseStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
