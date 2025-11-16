@@ -53,7 +53,8 @@
       "Bash(root@65.21.110.105:/opt/expensebot/apps/web/src/app/api/telegram/webhook/route.ts)",
       "Bash(npm run dev:*)",
       "Bash(ngrok http:*)",
-      "Bash(sshpass -e scp:*)"
+      "Bash(sshpass -e scp:*)",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []
