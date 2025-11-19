@@ -54,7 +54,9 @@
       "Bash(npm run dev:*)",
       "Bash(ngrok http:*)",
       "Bash(sshpass -e scp:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(export TELEGRAM_BOT_TOKEN='8260315731:AAHmndoA83ipjp373bH4dFT0uNqtMIvNLCk')",
+      "Bash(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@65.21.110.105 \"docker compose -f /opt/expensebot/docker-compose.prod.yml logs app --tail=100 | grep -i ''manual-expense\\|groq''\")"
     ],
     "deny": [],
     "ask": []
